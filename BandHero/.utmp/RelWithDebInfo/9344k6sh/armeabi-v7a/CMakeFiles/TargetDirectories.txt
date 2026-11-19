@@ -1,8 +1,0 @@
-/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/CMakeFiles/edit_cache.dir
-/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/CMakeFiles/rebuild_cache.dir
-/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/GameActivity/CMakeFiles/game.dir
-/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/GameActivity/CMakeFiles/edit_cache.dir
-/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/GameActivity/CMakeFiles/rebuild_cache.dir
-/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/FramePacing/CMakeFiles/swappywrapper.dir
-/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/FramePacing/CMakeFiles/edit_cache.dir
-/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/FramePacing/CMakeFiles/rebuild_cache.dir
