@@ -147,7 +147,7 @@ namespace BandHero.Gameplay
                 return;
             }
 
-            int lane = Layout.LaneAtX(world.x);
+            int lane = Layout.LaneAtXAt(world.x, world.y);
             if (lane < 0) return;
 
             _fingerIsStrum[fingerId] = false;
@@ -162,7 +162,7 @@ namespace BandHero.Gameplay
 
             if (!_fingerLane.TryGetValue(fingerId, out int previousLane)) return;
 
-            int lane = Layout.LaneAtX(world.x);
+            int lane = Layout.LaneAtXAt(world.x, world.y);
             if (lane < 0 || lane == previousLane) return;
 
             // Leaving the highway vertically (into the strum strip) keeps the fret held.

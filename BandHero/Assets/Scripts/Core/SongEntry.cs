@@ -26,6 +26,9 @@ namespace BandHero.Core
 
         public byte[] AlbumArt;
 
+        /// <summary>Decoded album art, cached because the song list is redrawn every frame.</summary>
+        public UnityEngine.Texture2D AlbumTexture;
+
         public bool HasLocalAudio => !string.IsNullOrEmpty(LocalAudioPath);
 
         public string Subtitle =>

@@ -14,6 +14,7 @@ namespace BandHero.Chart
     public static class MidiParser
     {
         static readonly string[] GuitarTracks = { "PART GUITAR", "PART LEAD", "T1 GEMS" };
+        static readonly string[] DrumTracks = { "PART DRUMS", "PART DRUM" };
 
         const int EasyBase = 60;
         const int SemitonesPerDifficulty = 12;
@@ -67,6 +68,16 @@ namespace BandHero.Chart
             for (int i = 0; i < GuitarTracks.Length; i++)
             {
                 if (string.Equals(name, GuitarTracks[i], StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
+        static bool IsDrumTrack(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            for (int i = 0; i < DrumTracks.Length; i++)
+            {
+                if (string.Equals(name, DrumTracks[i], StringComparison.OrdinalIgnoreCase)) return true;
             }
             return false;
         }
@@ -161,12 +172,32 @@ namespace BandHero.Chart
                 spans.Add(new NoteSpan { StartTick = pair.Value, EndTick = tick, Note = pair.Key });
             }
 
+            if (IsDrumTrack(trackName))
+            {
+                AddDrumHits(chart, spans);
+                return;
+            }
+
             if (!IsGuitarTrack(trackName)) return;
 
             for (int i = 0; i < spans.Count; i++)
             {
                 NoteSpan span = spans[i];
                 AddGuitarNote(chart, span.Note, span.StartTick, span.EndTick - span.StartTick, noteBase);
+            }
+        }
+
+        /// <summary>
+        /// Feeds drum onsets to the light show. The pad number is irrelevant, but the two
+        /// authoring markers (star power and the fill activator) are not hits and are skipped.
+        /// </summary>
+        static void AddDrumHits(SongChart chart, List<NoteSpan> spans)
+        {
+            for (int i = 0; i < spans.Count; i++)
+            {
+                int note = spans[i].Note;
+                if (note == StarPowerNote || note == 103 || note == 101) continue;
+                chart.AddDrumTick(spans[i].StartTick);
             }
         }
 

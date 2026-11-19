@@ -154,6 +154,10 @@ namespace BandHero.Core
         {
             error = null;
 
+            // The UI speaks enchor's naming ("Normal"); chart sections are authored with the
+            // Guitar Hero naming ("Medium"). Parsers only understand the latter.
+            string section = ChartDifficulty.ToSectionName(difficulty);
+
             SongChart chart;
             byte[] audioBytes = null;
             string audioName = "audio";
@@ -165,7 +169,7 @@ namespace BandHero.Core
                     string chartText = sng.ReadText("notes.chart");
                     if (chartText != null)
                     {
-                        chart = ChartFileParser.Parse(chartText, difficulty);
+                        chart = ChartFileParser.Parse(chartText, section);
                     }
                     else
                     {
@@ -175,7 +179,7 @@ namespace BandHero.Core
                             error = "This chart has no notes.chart or notes.mid.";
                             return null;
                         }
-                        chart = MidiParser.Parse(midi, difficulty);
+                        chart = MidiParser.Parse(midi, section);
                     }
 
                     if (!entry.HasLocalAudio)

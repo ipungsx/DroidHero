@@ -16,6 +16,7 @@ namespace BandHero.Core
         public static int LastMaxCombo;
         public static float LastAccuracy;
         public static int LastStars;
+        public static int LastRank;
         public static string LastSongName = "";
         public static string LastSongArtist = "";
     }

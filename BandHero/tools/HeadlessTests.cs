@@ -44,7 +44,13 @@ namespace BandHero.Tests
                 TestChartParsing(path);
                 TestGameplay(path);
                 TestAudioDecoding(path);
+                TestDrumHits(path);
             }
+
+            TestPerspectiveHighway();
+            TestDifficultyNaming();
+            TestSettingsRoundTrip();
+            TestLeaderboard();
 
             Console.WriteLine();
             Console.WriteLine(_failures == 0
@@ -539,6 +545,216 @@ namespace BandHero.Tests
             }
 
             session.Finish();
+        }
+
+        /// <summary>
+        /// The light show is driven by drum onsets. A chart with no drum track must still produce
+        /// onsets (falling back to the guitar notes) or the stage would stay dark for the song.
+        /// </summary>
+        static void TestDrumHits(string path)
+        {
+            SongChart chart = LoadChart(path, "Expert");
+
+            Check(chart.DrumHits.Count > 0, "drum hits are available for the light show (" + chart.DrumHits.Count + ")");
+
+            bool ascending = true;
+            for (int i = 1; i < chart.DrumHits.Count; i++)
+            {
+                if (chart.DrumHits[i] < chart.DrumHits[i - 1]) ascending = false;
+            }
+            Check(ascending, "drum hits are in time order");
+
+            bool inRange = true;
+            for (int i = 0; i < chart.DrumHits.Count; i++)
+            {
+                if (chart.DrumHits[i] < -1f || chart.DrumHits[i] > chart.SongLength + 10f) inRange = false;
+            }
+            Check(inRange, "drum hits fall inside the song");
+
+            // Two onsets on the same frame would fire two light pulses at once.
+            bool separated = true;
+            for (int i = 1; i < chart.DrumHits.Count; i++)
+            {
+                if (chart.DrumHits[i] - chart.DrumHits[i - 1] < 0.019f) separated = false;
+            }
+            Check(separated, "simultaneous drum hits are collapsed");
+
+            // The cached length must agree with a fresh walk of the notes.
+            float expected = 0f;
+            foreach (ChartNote note in chart.Notes)
+            {
+                if (note.EndTime > expected) expected = note.EndTime;
+            }
+            Check(Math.Abs(chart.SongLength - expected) < 0.0001f, "cached song length matches the notes");
+        }
+
+        /// <summary>
+        /// Notes must travel toward the player: the far end of the highway is narrower, so the
+        /// same lane is closer to the centre at the top than at the strike line.
+        /// </summary>
+        static void TestPerspectiveHighway()
+        {
+            var layout = new HighwayLayout();
+
+            float atHitLine = Math.Abs(layout.LaneCenterXAt(0, layout.HitLineY));
+            float atTop = Math.Abs(layout.LaneCenterXAt(0, layout.TopY));
+
+            Check(atTop < atHitLine, "outer lanes converge toward the far end");
+            Check(layout.LaneWidthAt(layout.TopY) < layout.LaneWidthAt(layout.HitLineY),
+                  "lanes are narrower at the far end");
+            Check(Math.Abs(layout.WidthScaleAt(layout.HitLineY) - 1f) < 0.0001f,
+                  "lanes are full width at the strike line");
+
+            // Every lane must still resolve to itself at any height, or taps would land wrong.
+            for (int lane = 0; lane < LaneInfo.Count; lane++)
+            {
+                float y = layout.HitLineY + (lane + 1) * 0.4f;
+                int resolved = layout.LaneAtXAt(layout.LaneCenterXAt(lane, y), y);
+                if (resolved != lane)
+                {
+                    Check(false, "lane " + lane + " maps back to lane " + resolved + " at y=" + y);
+                    return;
+                }
+            }
+            Check(true, "every lane maps back to itself at any height");
+
+            // A point far outside the tapered highway is no lane, even though it would be one
+            // near the strike line.
+            float wideX = layout.HighwayRightX - 0.05f;
+            Check(layout.LaneAtXAt(wideX, layout.HitLineY) >= 0, "the outer edge is a lane at the strike line");
+            Check(layout.LaneAtXAt(wideX, layout.TopY) == -1, "the same point is outside the tapered highway");
+
+            // Notes ahead of the song time sit above the strike line, behind it below.
+            float ahead = layout.TimeToY(12f, 10f);
+            float behind = layout.TimeToY(9f, 10f);
+            Check(ahead > layout.HitLineY, "a future note is above the strike line");
+            Check(behind < layout.HitLineY, "a past note is below the strike line");
+        }
+
+        /// <summary>
+        /// The menu speaks enchor's naming (Normal) while chart sections are authored as Medium.
+        /// A mismatch here would silently load the wrong difficulty, or none at all.
+        /// </summary>
+        static void TestDifficultyNaming()
+        {
+            Check(ChartDifficulty.All.Length == 4, "four difficulties are offered");
+            Check(ChartDifficulty.At(0) == "Easy" && ChartDifficulty.At(3) == "Expert",
+                  "difficulties run Easy to Expert");
+            Check(ChartDifficulty.At(-5) == "Easy" && ChartDifficulty.At(99) == "Expert",
+                  "difficulty index is clamped");
+
+            Check(ChartDifficulty.ToSectionName("Normal") == "Medium", "Normal maps to the Medium section");
+            Check(ChartDifficulty.ToSectionName("Medium") == "Medium", "Medium is already a section name");
+            Check(ChartDifficulty.ToSectionName("expert") == "Expert", "difficulty matching ignores case");
+            Check(ChartDifficulty.ToSectionName(null) == "Expert", "a missing difficulty defaults to Expert");
+
+            Check(ChartDifficulty.IndexOf("Normal") == 1, "Normal reads back as the second difficulty");
+            Check(ChartDifficulty.IndexOf("Medium") == 1, "Medium reads back as the second difficulty");
+            Check(ChartDifficulty.IndexOf("nonsense") == 3, "an unknown difficulty falls back to Expert");
+            Check(ChartDifficulty.SectionName(1) == "Medium", "section naming is available by index");
+        }
+
+        /// <summary>
+        /// Preferences must survive a restart, and a corrupt file must not stop the game.
+        /// </summary>
+        static void TestSettingsRoundTrip()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "bh_settings_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                GameSettings defaults = GameSettings.Load(root);
+                Check(defaults.DifficultyIndex == GameSettings.DefaultDifficultyIndex,
+                      "a fresh install starts on Expert");
+                Check(defaults.LightShow, "the light show is on by default");
+
+                defaults.ThemeIndex = 2;
+                defaults.DifficultyIndex = 1;
+                defaults.LightShow = false;
+                defaults.Save(root);
+
+                GameSettings reloaded = GameSettings.Load(root);
+                Check(reloaded.ThemeIndex == 2, "theme choice survives a restart");
+                Check(reloaded.DifficultyIndex == 1, "difficulty choice survives a restart");
+                Check(!reloaded.LightShow, "light show choice survives a restart");
+                Check(reloaded.Difficulty == "Normal", "the saved difficulty reads back by name");
+
+                File.WriteAllText(Path.Combine(root, "settings.txt"), "garbage\n=broken\ntheme=notanumber\n");
+                GameSettings recovered = GameSettings.Load(root);
+                Check(recovered.DifficultyIndex == GameSettings.DefaultDifficultyIndex,
+                      "a corrupt settings file falls back to defaults");
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        /// <summary>
+        /// The leaderboard is the only progression the game has, so ranking, grouping and
+        /// persistence all have to be exact.
+        /// </summary>
+        static void TestLeaderboard()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "bh_board_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                var board = new Leaderboard(root);
+
+                Check(board.Count == 0, "a new leaderboard is empty");
+                Check(!board.Submit(new ScoreRecord { Song = "Song", Difficulty = "Expert", Score = 0 }),
+                      "a zero score is not recorded");
+
+                board.Submit(new ScoreRecord { Song = "Song", Difficulty = "Expert", Score = 5000, Accuracy = 70f, MaxCombo = 40 });
+                board.Submit(new ScoreRecord { Song = "Song", Difficulty = "Expert", Score = 9000, Accuracy = 95f, MaxCombo = 120 });
+                board.Submit(new ScoreRecord { Song = "Song", Difficulty = "Expert", Score = 7000, Accuracy = 80f, MaxCombo = 60 });
+                board.Submit(new ScoreRecord { Song = "Song", Difficulty = "Easy", Score = 99999, Accuracy = 99f, MaxCombo = 300 });
+
+                List<ScoreRecord> expert = board.Top("Song", "Expert");
+                Check(expert.Count == 3, "records are grouped by difficulty");
+                Check(expert[0].Score == 9000, "the best run ranks first");
+                Check(expert[2].Score == 5000, "the weakest run ranks last");
+                Check(board.BestScore("Song", "Expert") == 9000, "best score is reported per difficulty");
+                Check(board.BestScore("Song", "Hard") == 0, "an unplayed difficulty has no score");
+
+                // Grouping must ignore case and surrounding spaces, or a re-downloaded chart
+                // with slightly different metadata would start a second board.
+                Check(board.Top(" song ", "expert").Count == 3, "grouping ignores case and spaces");
+
+                // Equal scores fall back to accuracy, then combo.
+                board.Submit(new ScoreRecord { Song = "Tie", Difficulty = "Expert", Score = 1000, Accuracy = 60f, MaxCombo = 10 });
+                board.Submit(new ScoreRecord { Song = "Tie", Difficulty = "Expert", Score = 1000, Accuracy = 90f, MaxCombo = 5 });
+                List<ScoreRecord> tie = board.Top("Tie", "Expert");
+                Check(tie[0].Accuracy == 90f, "equal scores rank by accuracy");
+
+                // The board must be capped, and the cap must keep the best runs.
+                for (int i = 0; i < 20; i++)
+                {
+                    board.Submit(new ScoreRecord { Song = "Flood", Difficulty = "Expert", Score = 100 + i, Accuracy = i, MaxCombo = i });
+                }
+                List<ScoreRecord> flood = board.Top("Flood", "Expert");
+                Check(flood.Count == Leaderboard.MaxEntriesPerGroup,
+                      "a group is capped at " + Leaderboard.MaxEntriesPerGroup + " entries");
+                Check(flood[0].Score == 119, "the cap keeps the best run");
+
+                Check(board.BestPerSong().Count == 3, "best-per-song lists each song once");
+
+                // A fresh instance reads what the previous one wrote.
+                var reloaded = new Leaderboard(root);
+                Check(reloaded.Top("Song", "Expert").Count == 3, "records survive a restart");
+                Check(reloaded.BestScore("Song", "Expert") == 9000, "the best score survives a restart");
+
+                ScoreRecord fresh = new ScoreRecord { Song = "Song", Difficulty = "Expert", Score = 12000, Accuracy = 99f, MaxCombo = 200 };
+                Check(board.Submit(fresh), "a new best run is ranked");
+                Check(board.Top("Song", "Expert")[0].Score == 12000, "a new best run takes first place");
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
         }
 
         static void CheckSortedByTime(SongChart chart)

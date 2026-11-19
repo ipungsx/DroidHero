@@ -30,6 +30,14 @@ namespace UnityEngine
             return truncated > value ? truncated - 1 : truncated;
         }
 
+        public static float Clamp01(float value)
+        {
+            if (value < 0f) return 0f;
+            return value > 1f ? 1f : value;
+        }
+
+        public static float Lerp(float a, float b, float t) => a + (b - a) * Clamp01(t);
+
         public static bool Approximately(float a, float b)
         {
             return Abs(b - a) < Max(1e-06f * Max(Abs(a), Abs(b)), 1.1754944e-38f * 8f);

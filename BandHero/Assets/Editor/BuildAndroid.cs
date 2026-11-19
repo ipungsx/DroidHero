@@ -110,6 +110,7 @@ namespace BandHero.EditorTools
             if (!File.Exists(ScenePath)) CreateGameScene();
             else EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
 
+            ApplyExternalTools();
             ApplyPlayerSettings();
 
             string directory = Path.GetDirectoryName(outputPath);
@@ -134,6 +135,29 @@ namespace BandHero.EditorTools
 
             Debug.Log("APK built: " + Path.GetFullPath(outputPath) +
                       " (" + (summary.totalSize / (1024f * 1024f)).ToString("F1") + " MB)");
+        }
+
+        /// <summary>
+        /// Points the editor at the Android SDK, JDK and NDK when the environment supplies them.
+        ///
+        /// These normally live in the editor preferences, which are per-machine and absent in
+        /// batch mode, so a headless build finds no JDK at all. The variables let CI (and these
+        /// scratch machines) describe their toolchain without touching a GUI. Unset variables
+        /// are left alone so an interactive editor keeps whatever it already has.
+        /// </summary>
+        static void ApplyExternalTools()
+        {
+            ApplyToolPath("ANDROID_SDK_ROOT", "AndroidSdkRoot");
+            ApplyToolPath("JAVA_HOME", "JdkPath");
+            ApplyToolPath("ANDROID_NDK_ROOT", "AndroidNdkRoot");
+        }
+
+        static void ApplyToolPath(string variable, string preference)
+        {
+            string path = Environment.GetEnvironmentVariable(variable);
+            if (string.IsNullOrEmpty(path) || !Directory.Exists(path)) return;
+            EditorPrefs.SetString(preference, path);
+            Debug.Log("Using " + preference + " from " + variable + ": " + path);
         }
 
         static void ApplyPlayerSettings()
@@ -169,10 +193,10 @@ namespace BandHero.EditorTools
             PlayerSettings.MTRendering = true;
 
             PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
+            // Only ES 3 is offered: Unity 6 rejects the build outright when ES 2 is requested.
             PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[]
             {
-                UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3,
-                UnityEngine.Rendering.GraphicsDeviceType.OpenGLES2
+                UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3
             });
 
             ApplyIcon();

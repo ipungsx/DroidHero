@@ -65,16 +65,31 @@ namespace BandHero.Chart
         public readonly List<ChartNote> Notes = new List<ChartNote>();
         public readonly List<StarPowerPhrase> StarPower = new List<StarPowerPhrase>();
 
+        /// <summary>
+        /// Onsets of the drum chart, in seconds, used only to drive the light show.
+        ///
+        /// Charts that ship no drum track fall back to the guitar onsets, so the lights still
+        /// pulse in time with the music instead of staying dark for the whole song.
+        /// </summary>
+        public readonly List<float> DrumHits = new List<float>();
+
+        float _songLength = -1f;
+
+        /// <summary>Length of the charted notes in seconds; cached because the HUD asks each frame.</summary>
         public float SongLength
         {
             get
             {
+                if (_songLength >= 0f) return _songLength;
+
                 float max = 0f;
                 for (int i = 0; i < Notes.Count; i++)
                 {
                     float end = Notes[i].EndTime;
                     if (end > max) max = end;
                 }
+
+                _songLength = max;
                 return max;
             }
         }
@@ -97,6 +112,11 @@ namespace BandHero.Chart
                 Tap = flags == 3,
             });
         }
+
+        /// <summary>Registers a drum onset tick, later resolved into <see cref="DrumHits"/>.</summary>
+        public void AddDrumTick(int tick) => _drumTicks.Add(tick);
+
+        readonly List<int> _drumTicks = new List<int>();
 
         public void RebuildTiming()
         {
@@ -200,6 +220,44 @@ namespace BandHero.Chart
 
             StarPower.Sort((a, b) => a.Start.CompareTo(b.Start));
             ResolveHopos();
+            ResolveDrumHits(audioOffsetSeconds);
+            _songLength = -1f;
+        }
+
+        /// <summary>
+        /// Converts the drum ticks to seconds, collapsing onsets that land within a few
+        /// milliseconds so a flam does not fire two light pulses on the same frame.
+        /// </summary>
+        void ResolveDrumHits(float audioOffsetSeconds)
+        {
+            DrumHits.Clear();
+
+            // Charts without a drum track fall back to the guitar onsets, which still land on
+            // the beat. Chords share a tick, so the fallback needs the same collapsing below.
+            var seconds = new List<float>(_drumTicks.Count > 0 ? _drumTicks.Count : Notes.Count);
+
+            if (_drumTicks.Count == 0)
+            {
+                for (int i = 0; i < Notes.Count; i++) seconds.Add(Notes[i].Time);
+            }
+            else
+            {
+                for (int i = 0; i < _drumTicks.Count; i++)
+                {
+                    seconds.Add(TickToSeconds(_drumTicks[i]) + Offset + audioOffsetSeconds);
+                }
+            }
+
+            seconds.Sort();
+
+            const float MinGap = 0.02f;
+            float last = float.MinValue;
+            for (int i = 0; i < seconds.Count; i++)
+            {
+                if (seconds[i] - last < MinGap) continue;
+                DrumHits.Add(seconds[i]);
+                last = seconds[i];
+            }
         }
 
         /// <summary>

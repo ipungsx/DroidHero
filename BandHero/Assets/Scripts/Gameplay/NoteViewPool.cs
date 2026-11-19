@@ -7,15 +7,21 @@ namespace BandHero.Gameplay
     /// <summary>
     /// Recycles note visuals. Charts can hold thousands of notes, so allocating a GameObject per
     /// note would cause GC spikes on Android; instead a fixed set of views is reused.
+    ///
+    /// Each note is drawn as three stacked sprites: an additive halo, the round body, and a
+    /// small specular highlight. The halo is what makes the note read as "glowing" on a phone
+    /// screen without any post-processing, which would cost a full-screen pass per frame.
     /// </summary>
     public class NoteViewPool
     {
-        class View
+        public class View
         {
             public GameObject Root;
+            public SpriteRenderer Halo;
             public SpriteRenderer Body;
-            public SpriteRenderer Glow;
+            public SpriteRenderer Core;
             public SpriteRenderer Sustain;
+            public SpriteRenderer Ripple;
             public bool InUse;
         }
 
@@ -36,35 +42,38 @@ namespace BandHero.Gameplay
             var root = new GameObject("NoteView");
             root.transform.SetParent(_parent, false);
 
-            var sustain = new GameObject("Sustain");
-            sustain.transform.SetParent(root.transform, false);
-            var sustainRenderer = sustain.AddComponent<SpriteRenderer>();
-            sustainRenderer.sprite = ProceduralSprites.White;
-            sustainRenderer.sortingOrder = _sortingOrder - 1;
-            sustainRenderer.enabled = false;
+            var sustain = Child(root.transform, "Sustain", ProceduralSprites.VerticalFade, _sortingOrder - 2);
+            var halo = Child(root.transform, "Halo", ProceduralSprites.Glow, _sortingOrder - 1);
+            var body = Child(root.transform, "Body", ProceduralSprites.Circle, _sortingOrder);
+            var core = Child(root.transform, "Core", ProceduralSprites.Glow, _sortingOrder + 1);
+            var ripple = Child(root.transform, "Ripple", ProceduralSprites.Ring, _sortingOrder + 2);
 
-            var body = new GameObject("Body");
-            body.transform.SetParent(root.transform, false);
-            var bodyRenderer = body.AddComponent<SpriteRenderer>();
-            bodyRenderer.sprite = ProceduralSprites.RoundedNote;
-            bodyRenderer.sortingOrder = _sortingOrder;
-
-            var glow = new GameObject("Glow");
-            glow.transform.SetParent(root.transform, false);
-            var glowRenderer = glow.AddComponent<SpriteRenderer>();
-            glowRenderer.sprite = ProceduralSprites.RoundedNote;
-            glowRenderer.sortingOrder = _sortingOrder - 1;
-            glowRenderer.color = new Color(1f, 1f, 1f, 0.35f);
-            glowRenderer.enabled = false;
+            sustain.enabled = false;
+            ripple.enabled = false;
 
             return new View
             {
                 Root = root,
-                Body = bodyRenderer,
-                Glow = glowRenderer,
-                Sustain = sustainRenderer,
+                Halo = halo,
+                Body = body,
+                Core = core,
+                Sustain = sustain,
+                Ripple = ripple,
                 InUse = false
             };
+        }
+
+        static SpriteRenderer Child(Transform parent, string name, Sprite sprite, int order)
+        {
+            var child = new GameObject(name);
+            child.transform.SetParent(parent, false);
+
+            var renderer = child.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sortingOrder = order;
+            renderer.color = new Color(1f, 1f, 1f, 0f);
+
+            return renderer;
         }
 
         public void ReleaseAll()
@@ -72,11 +81,11 @@ namespace BandHero.Gameplay
             for (int i = 0; i < _views.Count; i++)
             {
                 _views[i].InUse = false;
-                _views[i].Root.SetActive(false);
+                if (_views[i].Root.activeSelf) _views[i].Root.SetActive(false);
             }
         }
 
-        public void Acquire(out SpriteRenderer body, out SpriteRenderer glow, out SpriteRenderer sustain)
+        public View Acquire()
         {
             View view = null;
 
@@ -95,12 +104,11 @@ namespace BandHero.Gameplay
 
             view.InUse = true;
             view.Root.SetActive(true);
-            view.Glow.enabled = false;
+            view.Ripple.enabled = false;
             view.Sustain.enabled = false;
+            view.Core.enabled = true;
 
-            body = view.Body;
-            glow = view.Glow;
-            sustain = view.Sustain;
+            return view;
         }
     }
 }
