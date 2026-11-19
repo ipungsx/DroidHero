@@ -48,7 +48,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A missing licence is a setup gap, not a broken commit, so report it plainly
+      # instead of failing the run.
+      - name: Check for a Unity licence
+        id: licence
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ] || [ -n "$UNITY_SERIAL" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=APK build skipped::Add UNITY_LICENSE, UNITY_EMAIL and UNITY_PASSWORD repository secrets to build the APK. See the README."
+          fi
+
       - name: Cache Library
+        if: steps.licence.outputs.present == 'true'
         uses: actions/cache@v4
         with:
           path: BandHero/Library
@@ -58,6 +74,7 @@ jobs:
             Library-BandHero-
 
       - name: Build
+        if: steps.licence.outputs.present == 'true'
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -75,6 +92,7 @@ jobs:
           androidExportType: androidPackage
 
       - name: Upload APK
+        if: steps.licence.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: BandHero-apk
@@ -82,7 +100,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Unity log on failure
-        if: failure()
+        if: failure() && steps.licence.outputs.present == 'true' 
         uses: actions/upload-artifact@v4
         with:
           name: unity-log
