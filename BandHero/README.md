@@ -62,6 +62,22 @@ replace `UNITY_LICENSE` with `UNITY_SERIAL` and keep the other two.
 Without those secrets the build step is skipped and the run stays green, so a fork without a
 licence still gets test results. Look for the notice on the run for the reason.
 
+### Activating without a `.ulf` file (Unity 6)
+
+Unity 6 no longer writes `Unity_lic.ulf`. It stores the licence as
+`~/.config/unity3d/Unity/licenses/UnityEntitlementLicense.xml` instead, so the
+`UNITY_LICENSE` route below only applies to Unity 2022 and older. On Unity 6, activate
+from the command line and let the licensing client write that file:
+
+```bash
+Unity.Licensing.Client --activate-all --include-personal \
+  --username "$UNITY_EMAIL" --password "$UNITY_PASSWORD"
+```
+
+The binary lives in `<Editor>/Data/Resources/Licensing/Client/`. `--include-personal`
+falls back to a free Personal seat when no subscription is assigned, which is what makes
+this work for a personal account. Both commands need the account to have a password.
+
 ### Getting the licence file when you sign in with Google or SSO
 
 Signing in with "Continue with Google" (or any browser flow) does not create a password, and
