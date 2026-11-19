@@ -19,6 +19,7 @@ namespace BandHero.Gameplay
 
         HighwayLayout _layout;
         TouchInputController _input;
+        GameplayHud _hud;
         LoadedSong _song;
         float _leadInRemaining;
         bool _musicStarted;
@@ -64,6 +65,11 @@ namespace BandHero.Gameplay
             _input = gameObject.AddComponent<TouchInputController>();
             _input.Layout = _layout;
             _input.Session = Session;
+
+            _hud = gameObject.AddComponent<GameplayHud>();
+            _hud.Session = Session;
+            _hud.Controller = this;
+            Session.JudgementShown += _hud.ShowJudgement;
         }
 
         void Update()
@@ -82,6 +88,17 @@ namespace BandHero.Gameplay
                     _musicStarted = true;
                     Music.Play();
                 }
+            }
+
+            if (_hud != null && _hud.IsPaused) return;
+
+            if (_hud != null && _hud.QuitRequested)
+            {
+                // A quit ends the run without results, so the session is reported as null.
+                Resume();
+                Stop();
+                Finished?.Invoke(null);
+                return;
             }
 
             float time = SongTime;
@@ -120,6 +137,7 @@ namespace BandHero.Gameplay
         void OnDestroy()
         {
             Time.timeScale = 1f;
+            if (_hud != null && Session != null) Session.JudgementShown -= _hud.ShowJudgement;
         }
     }
 }

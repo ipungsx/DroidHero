@@ -26,6 +26,7 @@ SOURCES=$(find Assets/Scripts -name '*.cs' \
   ! -path '*/Gameplay/HighwayRenderer.cs' \
   ! -path '*/Gameplay/NoteViewPool.cs' \
   ! -path '*/Gameplay/TouchInputController.cs' \
+  ! -path '*/Gameplay/GameplayHud.cs' \
   ! -path '*/Audio/AudioDecoder.cs' \
   ! -path '*/Audio/OpusClipFactory.cs' \
   ! -path '*/Core/SongLibrary.cs' \
