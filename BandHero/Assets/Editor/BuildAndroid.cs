@@ -22,6 +22,9 @@ namespace BandHero.EditorTools
         const string ScenePath = "Assets/Scenes/Main.unity";
         const string OutputPath = "Builds/BandHero.apk";
 
+        /// <summary>Fallback for CI runs that cannot pass -customBuildPath.</summary>
+        const string OutputPathVariable = "BANDHERO_APK_PATH";
+
         [MenuItem("Band Hero/Create Game Scene")]
         public static void CreateGameScene()
         {
@@ -50,14 +53,14 @@ namespace BandHero.EditorTools
         }
 
         [MenuItem("Band Hero/Build Android APK")]
-        public static void BuildFromMenu() => Build(BuildOptions.None);
+        public static void BuildFromMenu() => Build(BuildOptions.None, OutputPath);
 
         /// <summary>Entry point for -executeMethod in batch mode.</summary>
         public static void BuildFromCommandLine()
         {
             try
             {
-                Build(BuildOptions.None);
+                Build(BuildOptions.None, OutputPath);
                 EditorApplication.Exit(0);
             }
             catch (Exception ex)
@@ -67,19 +70,55 @@ namespace BandHero.EditorTools
             }
         }
 
-        static void Build(BuildOptions options)
+        /// <summary>
+        /// Build entry point for game-ci, which supplies the output path and owns the editor
+        /// lifecycle. Unlike BuildFromCommandLine this must not exit the editor: the caller
+        /// still has to collect logs and the build report.
+        /// </summary>
+        public static void BuildForCi()
         {
+            Build(BuildOptions.None, ResolveCiOutputPath());
+        }
+
+        /// <summary>
+        /// game-ci passes the destination as -customBuildPath; the environment variable is a
+        /// fallback so the workflow can also set it directly.
+        /// </summary>
+        static string ResolveCiOutputPath()
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == "-customBuildPath" && !string.IsNullOrEmpty(args[i + 1]))
+                {
+                    string supplied = args[i + 1];
+                    // game-ci supplies a directory plus file name; keep it if it names a file.
+                    if (Path.GetExtension(supplied).Equals(".apk", StringComparison.OrdinalIgnoreCase))
+                        return supplied;
+                    return Path.Combine(supplied, Path.GetFileName(OutputPath));
+                }
+            }
+
+            string fromEnvironment = Environment.GetEnvironmentVariable(OutputPathVariable);
+            return string.IsNullOrEmpty(fromEnvironment) ? OutputPath : fromEnvironment;
+        }
+
+        static void Build(BuildOptions options, string outputPath)
+        {
+            // The scene is generated rather than committed, so a fresh checkout always builds
+            // a playable player instead of an empty scene list.
             if (!File.Exists(ScenePath)) CreateGameScene();
             else EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
 
             ApplyPlayerSettings();
 
-            Directory.CreateDirectory("Builds");
+            string directory = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = new[] { ScenePath },
-                locationPathName = OutputPath,
+                locationPathName = outputPath,
                 target = BuildTarget.Android,
                 targetGroup = BuildTargetGroup.Android,
                 options = options
@@ -93,7 +132,7 @@ namespace BandHero.EditorTools
                                     " (" + summary.totalErrors + " errors)");
             }
 
-            Debug.Log("APK built: " + Path.GetFullPath(OutputPath) +
+            Debug.Log("APK built: " + Path.GetFullPath(outputPath) +
                       " (" + (summary.totalSize / (1024f * 1024f)).ToString("F1") + " MB)");
         }
 
