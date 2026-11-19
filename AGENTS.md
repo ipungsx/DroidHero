@@ -28,3 +28,18 @@ otherwise break the harness with `CS0246 MonoBehaviour`.
   storage before returning a path.
 - `GameplayHud` owns the back button during play; `BandHeroApp.Update` must not also handle it
   or pause toggles twice.
+
+## CI
+
+- `.github/workflows/build-apk.yml` builds the APK; the local container has no Unity licence
+  and no `AndroidPlayer` module, so CI is the only build path.
+- The `test` job runs in `unityci/editor:ubuntu-6000.0.85f2-base-4.0.0` so it uses the same
+  Mono as the player build; set `UNITY_DATA=/opt/unity/Editor/Data` for `run-tests.sh`.
+- `containerRegistryImageVersion` must stay at `4`; line 3 fails with "No sdkmanager found"
+  on Unity 6.
+- The build needs `UNITY_LICENSE`, `UNITY_EMAIL` and `UNITY_PASSWORD` secrets. Without them
+  game-ci stops at "Missing Unity License File".
+- `BuildForCi` reads `-customBuildPath`, which game-ci sets to
+  `build/Android/BandHero.apk`; the artifact upload expects that exact path.
+- Roslyn aborts with an ICU error in this image unless
+  `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` is set.
