@@ -1,0 +1,90 @@
+name: Build APK
+
+# Android builds need a Unity licence and the Android build module. Neither is
+# available in a plain container, so the build runs in game-ci's editor image,
+# which already carries both, and authenticates with the repository's secrets.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Headless tests
+    runs-on: ubuntu-latest
+    # Same editor image as the build, so the tests compile against the exact Mono the
+    # player is built with rather than whatever the runner happens to ship.
+    container:
+      image: unityci/editor:ubuntu-6000.0.85f2-base-4.0.0
+    env:
+      UNITY_DATA: /opt/unity/Editor/Data
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch a chart to test against
+        run: |
+          md5=$(curl -sf -X POST 'https://api.enchor.us/search?page=1' \
+                  -H 'Content-Type: application/json' \
+                  -d '{"search":"metallica","instrument":"guitar","difficulty":"expert","drumType":"fourLane","page":1}' \
+                | sed -n 's/.*"md5":"\([a-f0-9]\{32\}\)".*/\1/p' | head -1)
+          test -n "$md5" || { echo "could not read an md5 from the search response"; exit 1; }
+          curl -sfL -o /tmp/chart.sng "https://files.enchor.us/$md5.sng"
+          ls -lh /tmp/chart.sng
+
+      - name: Run headless tests
+        working-directory: BandHero
+        run: ./tools/run-tests.sh /tmp/chart.sng
+
+  build:
+    name: Build APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: BandHero/Library
+          key: Library-BandHero-Android-${{ hashFiles('BandHero/Assets/**', 'BandHero/Packages/**', 'BandHero/ProjectSettings/**') }}
+          restore-keys: |
+            Library-BandHero-Android-
+            Library-BandHero-
+
+      - name: Build
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: BandHero
+          targetPlatform: Android
+          buildMethod: BandHero.EditorTools.BuildAndroid.BuildForCi
+          buildName: BandHero
+          buildsPath: build
+          # Image line 4 carries the ANDROID_HOME fix for Unity 6; line 3 fails
+          # with "No sdkmanager found" on these editor versions.
+          containerRegistryImageVersion: '4'
+          androidExportType: androidPackage
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BandHero-apk
+          path: build/Android/BandHero.apk
+          if-no-files-found: error
+
+      - name: Upload Unity log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-log
+          path: BandHero/Logs
+          if-no-files-found: ignore

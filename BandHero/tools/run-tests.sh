@@ -6,16 +6,32 @@
 set -u
 cd "$(dirname "$0")/.."
 
-U=/workspace/unity/Editor/Data
-MCS="$U/MonoBleedingEdge/bin/mcs"
-MONO="$U/MonoBleedingEdge/bin/mono"
+# Unity ships its own Mono; CI installs the distro package instead. Prefer Unity's
+# copy when it is present, and fall back to whatever is on PATH.
+U="${UNITY_DATA:-}"
+[ -n "$U" ] || { [ -d /workspace/unity/Editor/Data ] && U=/workspace/unity/Editor/Data; }
+
+MCS="${MCS:-${U:+$U/MonoBleedingEdge/bin/mcs}}"
+MONO="${MONO:-${U:+$U/MonoBleedingEdge/bin/mono}}"
+FAC="${FAC:-${U:+$U/MonoBleedingEdge/lib/mono/4.5/Facades}}"
+
+[ -x "${MCS:-}" ] || MCS=$(command -v mcs || command -v csc || true)
+[ -x "${MONO:-}" ] || MONO=$(command -v mono || true)
+[ -d "${FAC:-}" ] || FAC=$(find /usr/lib/mono -type d -name Facades 2>/dev/null | head -1)
+
+for tool in MCS MONO; do
+  if [ -z "${!tool:-}" ]; then
+    echo "FAIL: $tool not found. Install Mono or set $tool." >&2
+    exit 1
+  fi
+done
+[ -d "${FAC:-}" ] || { echo "FAIL: netstandard facades not found. Set FAC." >&2; exit 1; }
+
 OUT=/tmp/bhtest-bin
 mkdir -p "$OUT"
 cp -f Assets/Plugins/Concentus/Concentus.dll "$OUT/"
 
 CONCENTUS=Assets/Plugins/Concentus/Concentus.dll
-# Facades forward the netstandard contracts Concentus asks for to Mono's mscorlib.
-FAC=$U/MonoBleedingEdge/lib/mono/4.5/Facades
 
 # Only the engine-independent code: the visual, input and app layers need UnityEngine.
 SOURCES=$(find Assets/Scripts -name '*.cs' \

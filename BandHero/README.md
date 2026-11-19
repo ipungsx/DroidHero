@@ -42,6 +42,23 @@ through the Editor API rather than committed YAML, so a clean checkout builds id
 
 You can also use **Band Hero → Build Android APK** from the Editor menu.
 
+### Building on GitHub Actions
+
+`.github/workflows/build-apk.yml` builds the APK on a runner, so no local Unity install is
+needed. It runs the headless tests first, then builds in game-ci's Android editor image and
+uploads `BandHero.apk` as a downloadable artifact.
+
+Add three repository secrets under **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+| --- | --- |
+| `UNITY_LICENSE` | Full text of your `Unity_lic.ulf` file (Personal licence) |
+| `UNITY_EMAIL` | The email address of the Unity account |
+| `UNITY_PASSWORD` | That account's password |
+
+Then run **Actions → Build APK → Run workflow**, or push to `main`. For a Plus/Pro licence,
+replace `UNITY_LICENSE` with `UNITY_SERIAL` and keep the other two.
+
 ### Build prerequisites
 
 Two things must be in place before the command above can succeed, and neither ships with this
