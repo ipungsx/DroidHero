@@ -14,6 +14,8 @@ copyrighted is shipped with the game.
 | Difficulties | Easy, Medium, Hard, Expert from the chart's own note tracks |
 | Scoring | Per-note judgement, combo multiplier, star power, sustain notes, star rating |
 | Input | Multi-touch five-lane highway, sized for a phone in portrait |
+| HUD | Live score, combo, star power meter, judgement popups, pause and quit |
+| Calibration | Device-wide sync offset in 5 ms and 20 ms steps, saved between runs |
 
 Charts ship an Ogg Opus audio track. Unity cannot decode Opus, so the project carries its own
 decoder (see [Audio](#audio)).
@@ -63,8 +65,8 @@ BandHero/tools/run-tests.sh <chart.sng> [more.sng ...]
 
 It compiles the engine-independent sources with `mcs` and runs the suite against each chart you
 pass in: SNG parsing, all difficulties, a perfect run, an idle run, star power, lead-in timing,
-audio format detection, and a full Opus decode whose output is compared sample-by-sample against
-the streaming path.
+audio format detection, highway geometry, the local-audio link store, the calibration offset, and a
+full Opus decode whose output is compared sample-by-sample against the streaming path.
 
 Two compile checks keep the Unity-facing code honest:
 

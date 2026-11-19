@@ -20,7 +20,8 @@ namespace BandHero.Core
             SongSelect,
             EnchorSearch,
             Gameplay,
-            Results
+            Results,
+            Calibration
         }
 
         readonly SongLibrary _library = new SongLibrary();
@@ -99,17 +100,12 @@ namespace BandHero.Core
         {
             RefitCameraIfNeeded();
 
-            // The Android back button steps back through screens instead of quitting mid-song.
+            // In gameplay the HUD owns the back button, because pausing is what a player expects
+            // there. Everywhere else it steps back a screen.
+            if (_screen == Screen.Gameplay) return;
             if (!Input.GetKeyDown(KeyCode.Escape)) return;
 
-            if (_screen == Screen.Gameplay)
-            {
-                EndSong(null);
-            }
-            else if (_screen != Screen.Menu)
-            {
-                GoToMenu();
-            }
+            if (_screen != Screen.Menu) GoToMenu();
         }
 
         void OnGUI()
@@ -125,6 +121,7 @@ namespace BandHero.Core
                 case Screen.SongSelect: DrawSongSelect(); break;
                 case Screen.EnchorSearch: DrawEnchorSearch(); break;
                 case Screen.Results: DrawResults(); break;
+                case Screen.Calibration: DrawCalibration(); break;
             }
 
             if (!string.IsNullOrEmpty(_status))
@@ -180,7 +177,12 @@ namespace BandHero.Core
                 StartCoroutine(PickLocalAudio());
             }
 
-            if (GUI.Button(new Rect(x, y + step * 3f, buttonWidth, Scale(66)), "QUIT", UiSkin.Button))
+            if (GUI.Button(new Rect(x, y + step * 3f, buttonWidth, Scale(66)), "CALIBRATION", UiSkin.Button))
+            {
+                _screen = Screen.Calibration;
+            }
+
+            if (GUI.Button(new Rect(x, y + step * 4f, buttonWidth, Scale(66)), "QUIT", UiSkin.Button))
             {
                 Application.Quit();
             }
@@ -340,6 +342,68 @@ namespace BandHero.Core
             }
 
             GUI.EndScrollView();
+        }
+
+        void DrawCalibration()
+        {
+            float w = UnityEngine.Screen.width;
+            float h = UnityEngine.Screen.height;
+
+            GUI.Label(new Rect(Scale(40), Scale(30), w - Scale(80), Scale(60)), "AUDIO CALIBRATION", UiSkin.Heading);
+
+            if (GUI.Button(new Rect(w - Scale(200), Scale(34), Scale(160), Scale(52)), "BACK", UiSkin.Button))
+            {
+                GoToMenu();
+                return;
+            }
+
+            GUI.Label(new Rect(Scale(60), h * 0.26f, w - Scale(120), Scale(120)),
+                      "Notes land early or late? Nudge the offset until notes sit on the strike line "
+                      + "when you strum on the beat.\n\nLocal music files often carry a short silence "
+                      + "at the start that chart-embedded audio does not, so this is worth setting once "
+                      + "per device.", UiSkin.Body);
+
+            float buttonWidth = Scale(140);
+            float centerX = w * 0.5f;
+            float rowY = h * 0.50f;
+
+            if (GUI.Button(new Rect(centerX - buttonWidth * 2f - Scale(20), rowY, buttonWidth, Scale(76)),
+                           "-20", UiSkin.Button))
+            {
+                _library.CalibrationMilliseconds -= 20;
+            }
+
+            if (GUI.Button(new Rect(centerX - buttonWidth - Scale(6), rowY, buttonWidth, Scale(76)),
+                           "-5", UiSkin.Button))
+            {
+                _library.CalibrationMilliseconds -= AudioCalibration.StepMilliseconds;
+            }
+
+            if (GUI.Button(new Rect(centerX + Scale(6), rowY, buttonWidth, Scale(76)),
+                           "+5", UiSkin.Button))
+            {
+                _library.CalibrationMilliseconds += AudioCalibration.StepMilliseconds;
+            }
+
+            if (GUI.Button(new Rect(centerX + buttonWidth + Scale(20), rowY, buttonWidth, Scale(76)),
+                           "+20", UiSkin.Button))
+            {
+                _library.CalibrationMilliseconds += 20;
+            }
+
+            GUI.Label(new Rect(0f, rowY + Scale(100), w, Scale(80)),
+                      AudioCalibration.Describe(_library.CalibrationMilliseconds), UiSkin.Title);
+
+            if (GUI.Button(new Rect(centerX - Scale(160), rowY + Scale(200), Scale(320), Scale(66)),
+                           "RESET", UiSkin.Button))
+            {
+                _library.CalibrationMilliseconds = 0;
+            }
+
+            GUI.Label(new Rect(Scale(60), h - Scale(140), w - Scale(120), Scale(100)),
+                      "Range " + AudioCalibration.MinMilliseconds + " to " + AudioCalibration.MaxMilliseconds
+                      + " ms. The offset is applied to every chart, on top of the offset the chart declares.",
+                      UiSkin.Small);
         }
 
         void DrawResults()

@@ -24,6 +24,19 @@ namespace BandHero.Core
 
         AudioLinkStore _links;
 
+        /// <summary>Manual sync offset applied to every chart, in milliseconds.</summary>
+        public int CalibrationMilliseconds
+        {
+            get => _calibration ?? (_calibration = AudioCalibration.Load(Application.persistentDataPath)).Value;
+            set
+            {
+                _calibration = AudioCalibration.Clamp(value);
+                AudioCalibration.Save(Application.persistentDataPath, _calibration.Value);
+            }
+        }
+
+        int? _calibration;
+
         public SongLibrary()
         {
             Directory.CreateDirectory(ChartsDirectory);
@@ -210,8 +223,8 @@ namespace BandHero.Core
             }
 
             // Chart audio and a chosen local track rarely start at the same instant, so the
-            // chart offset is applied on top of any manual calibration.
-            chart.FinalizeChart();
+            // player's calibration is applied on top of the offset the chart itself declares.
+            chart.FinalizeChart(AudioCalibration.ToSeconds(CalibrationMilliseconds));
 
             return new LoadedSong
             {

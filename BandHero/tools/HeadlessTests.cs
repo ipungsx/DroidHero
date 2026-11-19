@@ -142,6 +142,7 @@ namespace BandHero.Tests
             TestFormatDetection();
             TestHighwayGeometry();
             TestAudioLinkStore();
+            TestAudioCalibration();
 
             // Star power: hitting notes with SP phrases must fill a bar the player can activate.
             var starPower = new GameSession(chart);
@@ -329,6 +330,42 @@ namespace BandHero.Tests
             finally
             {
                 if (File.Exists(file)) File.Delete(file);
+            }
+        }
+
+        /// <summary>
+        /// A calibration offset shifts every note, so an out-of-range or unparseable value would
+        /// silently move the whole chart. Clamping and the zero fallback are what keep it safe.
+        /// </summary>
+        static void TestAudioCalibration()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "bh_cal_" + Guid.NewGuid().ToString("N"));
+
+            try
+            {
+                Check(AudioCalibration.Load(root) == 0, "an unset calibration reads as zero");
+                Check(AudioCalibration.ToSeconds(50) == 0.05f, "50 ms converts to 0.05 s");
+                Check(AudioCalibration.ToSeconds(-50) == -0.05f, "a negative offset converts too");
+                Check(AudioCalibration.Clamp(9999) == AudioCalibration.MaxMilliseconds, "large values clamp to the maximum");
+                Check(AudioCalibration.Clamp(-9999) == AudioCalibration.MinMilliseconds, "small values clamp to the minimum");
+                Check(AudioCalibration.Clamp(37) == 37, "in-range values pass through");
+
+                AudioCalibration.Save(root, 120);
+                Check(AudioCalibration.Load(root) == 120, "a saved calibration is read back");
+
+                AudioCalibration.Save(root, 9999);
+                Check(AudioCalibration.Load(root) == AudioCalibration.MaxMilliseconds, "saving clamps before writing");
+
+                File.WriteAllText(Path.Combine(root, "calibration.txt"), "not a number");
+                Check(AudioCalibration.Load(root) == 0, "a corrupt calibration falls back to zero");
+
+                Check(AudioCalibration.Describe(0) == "0 ms", "zero describes without a sign");
+                Check(AudioCalibration.Describe(35) == "+35 ms", "a positive offset shows a plus");
+                Check(AudioCalibration.Describe(-35) == "-35 ms", "a negative offset keeps its sign");
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
             }
         }
 
