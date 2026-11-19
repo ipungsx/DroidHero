@@ -41,7 +41,7 @@
 		},
 		{
 			"isGenerated" : true,
-			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/CMakeFiles/3.22.1-g37088a8/CMakeSystem.cmake"
+			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/arm64-v8a/CMakeFiles/3.22.1-g37088a8/CMakeSystem.cmake"
 		},
 		{
 			"isExternal" : true,
@@ -307,7 +307,7 @@
 		},
 		{
 			"isGenerated" : true,
-			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/CMakeFiles/3.22.1-g37088a8/CMakeCCompiler.cmake"
+			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/arm64-v8a/CMakeFiles/3.22.1-g37088a8/CMakeCCompiler.cmake"
 		},
 		{
 			"isCMake" : true,
@@ -541,7 +541,7 @@
 		},
 		{
 			"isGenerated" : true,
-			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/CMakeFiles/3.22.1-g37088a8/CMakeCXXCompiler.cmake"
+			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/arm64-v8a/CMakeFiles/3.22.1-g37088a8/CMakeCXXCompiler.cmake"
 		},
 		{
 			"isCMake" : true,
@@ -692,7 +692,7 @@
 		},
 		{
 			"isGenerated" : true,
-			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/CMakeFiles/3.22.1-g37088a8/CMakeCCompiler.cmake"
+			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/arm64-v8a/CMakeFiles/3.22.1-g37088a8/CMakeCCompiler.cmake"
 		},
 		{
 			"isCMake" : true,
@@ -786,32 +786,32 @@
 		},
 		{
 			"isGenerated" : true,
-			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a/CMakeFiles/3.22.1-g37088a8/CMakeCXXCompiler.cmake"
+			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/arm64-v8a/CMakeFiles/3.22.1-g37088a8/CMakeCXXCompiler.cmake"
 		},
 		{
 			"path" : "GameActivity/CMakeLists.txt"
 		},
 		{
 			"isExternal" : true,
-			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/prefab/armeabi-v7a/prefab/lib/arm-linux-androideabi/cmake/game-activity/game-activityConfig.cmake"
+			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/prefab/arm64-v8a/prefab/lib/aarch64-linux-android/cmake/game-activity/game-activityConfig.cmake"
 		},
 		{
 			"path" : "FramePacing/CMakeLists.txt"
 		},
 		{
 			"isExternal" : true,
-			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/prefab/armeabi-v7a/prefab/lib/arm-linux-androideabi/cmake/games-frame-pacing/games-frame-pacingConfigVersion.cmake"
+			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/prefab/arm64-v8a/prefab/lib/aarch64-linux-android/cmake/games-frame-pacing/games-frame-pacingConfigVersion.cmake"
 		},
 		{
 			"isExternal" : true,
-			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/prefab/armeabi-v7a/prefab/lib/arm-linux-androideabi/cmake/games-frame-pacing/games-frame-pacingConfig.cmake"
+			"path" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/prefab/arm64-v8a/prefab/lib/aarch64-linux-android/cmake/games-frame-pacing/games-frame-pacingConfig.cmake"
 		}
 	],
 	"kind" : "cmakeFiles",
 	"paths" : 
 	{
-		"build" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a",
-		"source" : "/project/BandHero/Library/Bee/Android/Prj/Mono2x/Gradle/unityLibrary/src/main/cpp"
+		"build" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/arm64-v8a",
+		"source" : "/project/BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp"
 	},
 	"version" : 
 	{

@@ -95,14 +95,14 @@
 				{
 					"directoryIndex" : 1,
 					"id" : "game::@d02bb112ea9f9c2ed29f",
-					"jsonFile" : "target-game-RelWithDebInfo-23084a64895c2af49422.json",
+					"jsonFile" : "target-game-RelWithDebInfo-5c1bbcc80903e32bbf2e.json",
 					"name" : "game",
 					"projectIndex" : 1
 				},
 				{
 					"directoryIndex" : 2,
 					"id" : "swappywrapper::@7e25bd1f32ce224db4e9",
-					"jsonFile" : "target-swappywrapper-RelWithDebInfo-c71e276850d4e925030c.json",
+					"jsonFile" : "target-swappywrapper-RelWithDebInfo-f06db15bf22d0df0e1d7.json",
 					"name" : "swappywrapper",
 					"projectIndex" : 2
 				}
@@ -113,7 +113,7 @@
 	"paths" : 
 	{
 		"build" : "/project/BandHero/.utmp/RelWithDebInfo/9344k6sh/armeabi-v7a",
-		"source" : "/project/BandHero/Library/Bee/Android/Prj/Mono2x/Gradle/unityLibrary/src/main/cpp"
+		"source" : "/project/BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp"
 	},
 	"version" : 
 	{
