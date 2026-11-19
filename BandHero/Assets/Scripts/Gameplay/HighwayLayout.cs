@@ -18,17 +18,43 @@ namespace BandHero.Gameplay
         public float LaneWidth = 1.1f;
         public float NoteHeight = 0.34f;
 
+        /// <summary>
+        /// Width of the highway at the top, as a fraction of its width at the strike line.
+        ///
+        /// Notes travel from the far end of a stage toward the player, so the far end has to be
+        /// narrower. This is the whole 2D perspective effect: one lerp on the lane centre.
+        /// </summary>
+        public float PerspectiveScale = 0.52f;
+
         public float HighwayHeight => TopY - HitLineY;
 
-        public float LaneCenterX(int lane)
+        /// <summary>Lane width multiplier at a given height; 1 at the strike line, tapering upward.</summary>
+        public float WidthScaleAt(float y)
+        {
+            float t = Mathf.Clamp01((y - HitLineY) / Mathf.Max(0.0001f, HighwayHeight));
+            return Mathf.Lerp(1f, PerspectiveScale, t);
+        }
+
+        /// <summary>Lane centre at the strike line.</summary>
+        public float LaneCenterX(int lane) => LaneCenterXAt(lane, HitLineY);
+
+        /// <summary>Lane centre at an arbitrary height, following the perspective taper.</summary>
+        public float LaneCenterXAt(int lane, float y)
         {
             float total = LaneWidth * LaneInfo.Count;
             float left = -total * 0.5f + LaneWidth * 0.5f;
-            return left + lane * LaneWidth;
+            float hitLineX = left + lane * LaneWidth;
+            return hitLineX * WidthScaleAt(y);
         }
+
+        /// <summary>Half-width of a lane at an arbitrary height, used to size note heads.</summary>
+        public float LaneWidthAt(float y) => LaneWidth * WidthScaleAt(y);
 
         public float HighwayLeftX => LaneCenterX(0) - LaneWidth * 0.5f;
         public float HighwayRightX => LaneCenterX(LaneInfo.Count - 1) + LaneWidth * 0.5f;
+
+        public float HighwayLeftXAt(float y) => LaneCenterXAt(0, y) - LaneWidthAt(y) * 0.5f;
+        public float HighwayRightXAt(float y) => LaneCenterXAt(LaneInfo.Count - 1, y) + LaneWidthAt(y) * 0.5f;
 
         /// <summary>
         /// Y position for a note at the given time. Notes at the hit line land exactly on
@@ -65,12 +91,20 @@ namespace BandHero.Gameplay
             return (halfWidth + horizontalMargin) / aspect;
         }
 
-        /// <summary>Lane under a world-space point, or -1 when the point is outside the highway.</summary>
-        public int LaneAtX(float x)
-        {
-            if (x < HighwayLeftX || x > HighwayRightX) return -1;
+        /// <summary>Lane under a world-space point at the strike line, or -1 when outside.</summary>
+        public int LaneAtX(float x) => LaneAtXAt(x, HitLineY);
 
-            int lane = Mathf.FloorToInt((x - HighwayLeftX) / LaneWidth);
+        /// <summary>
+        /// Lane under a point at a given height. Because the highway narrows toward the top, the
+        /// same screen X can be lane 0 near the strike line and outside the highway far above it.
+        /// </summary>
+        public int LaneAtXAt(float x, float y)
+        {
+            float left = HighwayLeftXAt(y);
+            float width = LaneWidthAt(y);
+            if (x < left || x > left + width * LaneInfo.Count) return -1;
+
+            int lane = Mathf.FloorToInt((x - left) / width);
             return Mathf.Clamp(lane, 0, LaneInfo.Count - 1);
         }
     }

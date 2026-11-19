@@ -3,44 +3,37 @@ using UnityEngine;
 namespace BandHero.UI
 {
     /// <summary>
-    /// Fret colours and layout constants for the 2D highway. Colours follow the classic
-    /// five-fret arrangement so the lanes are readable at a glance on a phone screen.
+    /// The active palette for the highway.
+    ///
+    /// This is a thin view over <see cref="GameplayTheme"/> so rendering code can ask for "the
+    /// colour of lane 2" without caring which theme the player picked. Set <see cref="Current"/>
+    /// once before building the highway; the renderer reads it every frame.
     /// </summary>
     public static class LaneTheme
     {
-        public static readonly Color[] LaneColors =
-        {
-            new Color(0.29f, 0.87f, 0.31f), // green
-            new Color(0.95f, 0.26f, 0.26f), // red
-            new Color(0.98f, 0.85f, 0.22f), // yellow
-            new Color(0.30f, 0.55f, 0.98f), // blue
-            new Color(0.96f, 0.53f, 0.18f), // orange
-        };
+        static GameplayTheme _current = GameplayTheme.All[0];
 
-        public static readonly Color[] LaneColorsDim =
+        public static GameplayTheme Current
         {
-            new Color(0.16f, 0.42f, 0.17f),
-            new Color(0.45f, 0.14f, 0.14f),
-            new Color(0.45f, 0.39f, 0.12f),
-            new Color(0.16f, 0.27f, 0.45f),
-            new Color(0.45f, 0.26f, 0.10f),
-        };
-
-        public static readonly Color StarPowerColor = new Color(0.62f, 0.86f, 1f);
-        public static readonly Color BackgroundColor = new Color(0.05f, 0.05f, 0.08f);
-        public static readonly Color HighwayColor = new Color(0.10f, 0.10f, 0.14f, 0.92f);
-        public static readonly Color HitLineColor = new Color(1f, 1f, 1f, 0.85f);
-
-        public static Color ForLane(int lane)
-        {
-            if (lane < 0 || lane >= LaneColors.Length) return Color.white;
-            return LaneColors[lane];
+            get => _current;
+            set => _current = value ?? GameplayTheme.All[0];
         }
 
-        public static Color DimForLane(int lane)
-        {
-            if (lane < 0 || lane >= LaneColorsDim.Length) return Color.gray;
-            return LaneColorsDim[lane];
-        }
+        public static void Select(int index) => _current = GameplayTheme.At(index);
+
+        public static Color ForLane(int lane) => _current.Lane(lane);
+
+        public static Color DimForLane(int lane) => _current.Dim(lane);
+
+        public static Color StarPowerColor => _current.StarPower;
+        public static Color BackgroundColor => _current.Background;
+        public static Color BackgroundGlowColor => _current.BackgroundGlow;
+        public static Color HighwayColor => _current.Highway;
+        public static Color HighwayEdgeColor => _current.HighwayEdge;
+        public static Color HitLineColor => _current.HitLine;
+        public static Color AccentColor => _current.Accent;
+        public static Color BeamColorA => _current.BeamA;
+        public static Color BeamColorB => _current.BeamB;
+        public static Color CrowdColor => _current.Crowd;
     }
 }

@@ -85,9 +85,31 @@ namespace BandHero.Chart
                 }
             }
 
+            ParseDrumTrack(sections, chart, difficulty);
+
             ApplyStarPower(chart);
             chart.FinalizeChart();
             return chart;
+        }
+
+        /// <summary>
+        /// Collects the drum onsets for the light show. Drum sections use the same
+        /// "tick = N lane" note lines as guitar sections, so only the tick matters here.
+        /// </summary>
+        static void ParseDrumTrack(List<Section> sections, SongChart chart, string difficulty)
+        {
+            Section drums = FindSection(sections, difficulty + "Drums");
+            if (drums == null) return;
+
+            foreach (var line in drums.Lines)
+            {
+                if (!TryParseTick(line.Key, out int tick)) continue;
+
+                string[] parts = line.Value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 2 || parts[0] != "N") continue;
+
+                chart.AddDrumTick(tick);
+            }
         }
 
         static void ApplyStarPower(SongChart chart)
