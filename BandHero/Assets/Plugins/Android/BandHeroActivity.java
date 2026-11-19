@@ -3,13 +3,13 @@ package com.bandhero.picker;
 import android.content.Intent;
 import android.os.Bundle;
 
-import com.unity3d.player.UnityPlayerActivity;
+import com.unity3d.player.UnityPlayerGameActivity;
 
 /**
  * Unity's default activity does not forward file-picker results, so this subclass relays them
  * to {@link BandHeroFilePicker}.
  */
-public class BandHeroActivity extends UnityPlayerActivity
+public class BandHeroActivity extends UnityPlayerGameActivity
 {
     @Override
     protected void onCreate(Bundle savedInstanceState)
