@@ -59,6 +59,42 @@ Add three repository secrets under **Settings → Secrets and variables → Acti
 Then run **Actions → Build APK → Run workflow**, or push to `main`. For a Plus/Pro licence,
 replace `UNITY_LICENSE` with `UNITY_SERIAL` and keep the other two.
 
+Without those secrets the build step is skipped and the run stays green, so a fork without a
+licence still gets test results. Look for the notice on the run for the reason.
+
+### Getting the licence file when you sign in with Google or SSO
+
+Signing in with "Continue with Google" (or any browser flow) does not create a password, and
+game-ci needs one: it activates Unity from the command line with `-username` and `-password`.
+Two separate steps fix that.
+
+**1. Set a Unity ID password.** A Google-linked account still has a Unity ID underneath.
+Go to <https://cloud.unity.com/account/security>, sign in, and set a password. Alternatively
+use the *Reset your password* link at <https://login.unity.com> with the same email address.
+Keep Google sign-in linked if you like; the password works alongside it.
+
+**2. Generate the `.ulf` file.** The Unity Hub is the only way to activate a Personal licence,
+and the file is easy to miss:
+
+1. Open Unity Hub → **Preferences** (gear icon) → **Licenses**.
+2. Click **Add** → **Get a free personal license** and finish the flow.
+   Do not skip this even if a licence already appears in the list — an existing entry does
+   not guarantee the file exists on disk.
+3. Copy the file from one of these paths:
+
+   | OS | Path |
+   | --- | --- |
+   | Windows | `C:\ProgramData\Unity\Unity_lic.ulf` |
+   | macOS | `/Library/Application Support/Unity/Unity_lic.ulf` |
+   | Linux | `~/.local/share/unity3d/Unity/Unity_lic.ulf` |
+
+4. Paste the whole file contents into the `UNITY_LICENSE` secret.
+5. Sign out of Unity Hub afterwards. Hub 3.7 and later dropped the *Return license* action for
+   Personal, and signing out is how the seat is released so CI can take it.
+
+A licence is not tied to an OS or Editor version, so generating it on Windows and building on
+Linux is fine.
+
 ### Build prerequisites
 
 Two things must be in place before the command above can succeed, and neither ships with this

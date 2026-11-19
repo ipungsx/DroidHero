@@ -38,7 +38,11 @@ otherwise break the harness with `CS0246 MonoBehaviour`.
 - `containerRegistryImageVersion` must stay at `4`; line 3 fails with "No sdkmanager found"
   on Unity 6.
 - The build needs `UNITY_LICENSE`, `UNITY_EMAIL` and `UNITY_PASSWORD` secrets. Without them
-  game-ci stops at "Missing Unity License File".
+  game-ci stops at "Missing Unity License File". The workflow checks for them first and skips
+  the build instead, so a fork without a licence still gets green test runs.
+- game-ci does not install the `.ulf`; it extracts the serial from `DeveloperData` inside it and
+  activates from the command line. That is why a password is mandatory even for Personal, and
+  why a Google/SSO login has to set a Unity ID password first.
 - `BuildForCi` reads `-customBuildPath`, which game-ci sets to
   `build/Android/BandHero.apk`; the artifact upload expects that exact path.
 - Roslyn aborts with an ICU error in this image unless
