@@ -1,12 +1,12 @@
 # ninja log v5
-13	2155	1795096713079075567	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	fad0559994f283fd
-4	2414	1795096713343075507	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	1c4721faec95c150
-3	3150	1795096714070075342	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	c8cb09983e9226f1
-5	3184	1795096714115075332	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	4eab6e79f06ffc4c
-3151	3472	1795096714421075263	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	cd11286c5304676c
-3473	3557	1795096714503075245	/project/BandHero/Library/Bee/Android/Prj/Mono2x/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/9344k6sh/obj/armeabi-v7a/libswappywrapper.so	71b9d6427844490f
-12	3724	1795096714659075209	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	a6b0c880d6ec2592
-2169	4051	1795096714988075135	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	90d62df0fbe4d
-0	4142	1795096715086075113	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	35184902cadddad0
-2414	4746	1795096715675074979	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	eb802f42568cd698
-4746	4845	1795096715786074954	/project/BandHero/Library/Bee/Android/Prj/Mono2x/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/9344k6sh/obj/armeabi-v7a/libgame.so	6fcd5c31641114f0
+6	2199	1795097400783919963	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	9fe59758a96f047f
+12	2308	1795097400896919938	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	cbbb8c8784f2a4e8
+2	2595	1795097401168919876	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	42a663392da6457a
+4	2606	1795097401182919873	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	2a9e4ba814ace7de
+2599	2818	1795097401416919820	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	7315e1b8cf5b167c
+2818	2933	1795097401532919794	/project/BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/9344k6sh/obj/armeabi-v7a/libswappywrapper.so	175a273f2e29fd9d
+7	3094	1795097401674919762	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	86f850038e1f9da5
+0	3298	1795097401876919716	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	4846321a579252a8
+2208	3931	1795097402526919569	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	ccb7fa17a46ff6ad
+2308	3997	1795097402594919554	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	958e4d928f81d60f
+3998	4078	1795097402676919535	/project/BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/9344k6sh/obj/armeabi-v7a/libgame.so	33f9dee778d58e16

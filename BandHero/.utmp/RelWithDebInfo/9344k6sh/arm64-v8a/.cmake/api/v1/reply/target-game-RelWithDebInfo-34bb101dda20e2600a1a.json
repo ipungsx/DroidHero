@@ -2,7 +2,7 @@
 	"artifacts" : 
 	[
 		{
-			"path" : "/project/BandHero/Library/Bee/Android/Prj/Mono2x/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/9344k6sh/obj/armeabi-v7a/libgame.so"
+			"path" : "/project/BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/9344k6sh/obj/arm64-v8a/libgame.so"
 		}
 	],
 	"backtrace" : 1,
@@ -56,7 +56,7 @@
 			"compileCommandFragments" : 
 			[
 				{
-					"fragment" : "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D__BIONIC_NO_PAGE_SIZE_MACRO -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Werror=format-security   -Wall -Wextra -pedantic -Werror -O2 -g -DNDEBUG -fPIC"
+					"fragment" : "-g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D__BIONIC_NO_PAGE_SIZE_MACRO -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -Wall -Wextra -pedantic -Werror -O2 -g -DNDEBUG -fPIC"
 				}
 			],
 			"defines" : 
@@ -73,7 +73,7 @@
 			[
 				{
 					"backtrace" : 4,
-					"path" : "/project/BandHero/Library/Bee/Android/Prj/Mono2x/Gradle/unityLibrary/src/main/cpp/GameActivity"
+					"path" : "/project/BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp/GameActivity"
 				},
 				{
 					"backtrace" : 2,
@@ -105,7 +105,7 @@
 		"commandFragments" : 
 		[
 			{
-				"fragment" : "-Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments  -Wl,--gc-sections",
+				"fragment" : "-Wl,-z,max-page-size=16384 -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments  -Wl,--gc-sections",
 				"role" : "flags"
 			},
 			{
@@ -115,7 +115,7 @@
 			},
 			{
 				"backtrace" : 2,
-				"fragment" : "/root/.gradle/caches/9.3.1/transforms/6b0cdf291b09a1ffa82b6ed7b8c3bded/transformed/jetified-games-activity-4.4.2/prefab/modules/game-activity_static/libs/android.armeabi-v7a/libgame-activity_static.a",
+				"fragment" : "/root/.gradle/caches/9.3.1/transforms/6b0cdf291b09a1ffa82b6ed7b8c3bded/transformed/jetified-games-activity-4.4.2/prefab/modules/game-activity_static/libs/android.arm64-v8a/libgame-activity_static.a",
 				"role" : "libraries"
 			},
 			{
