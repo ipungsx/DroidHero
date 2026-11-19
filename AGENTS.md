@@ -5,14 +5,45 @@ enchor.us; audio comes from the player's device to avoid shipping copyrighted re
 
 ## Verifying changes
 
-The Unity editor in this environment has **no licence and no AndroidPlayer module**, so the
-editor cannot open the project or build an APK. Use the licence-free harness instead:
+The quickest check needs no Unity licence:
 
 ```bash
 BandHero/tools/run-tests.sh /tmp/sample.sng        # headless suite, needs a chart file
 ./compile_check.sh                                  # runtime scripts vs real UnityEngine
 ./compile_check_editor.sh                           # Editor scripts vs UnityEditor
 ```
+
+## Building an APK locally
+
+`/workspace/unity/Editor/Unity` can build the APK in batch mode once the Android module and
+toolchain are in place. `BuildAndroid.ApplyExternalTools` reads the paths from the
+environment, so no editor preferences are needed:
+
+```bash
+export JAVA_HOME=/workspace/unity/jdk
+export ANDROID_SDK_ROOT=/workspace/unity/sdk
+export ANDROID_NDK_ROOT=/workspace/unity/sdk/ndk/27.2.12479018
+/workspace/unity/Editor/Unity -batchmode -nographics -quit \
+  -projectPath "$PWD/BandHero" -buildTarget Android \
+  -executeMethod BandHero.EditorTools.BuildAndroid.BuildFromCommandLine \
+  -logFile "$PWD/BandHero/build.log"
+```
+
+The toolchain is not installed by default. Getting it in place took these steps, and each one
+failed loudly before the next was satisfied:
+
+- The Android module unpacks from the player package's `Payload` (gzip'd `odc` cpio, 76-byte
+  header) into `Editor/Data/PlaybackEngines/AndroidPlayer`. Without it the build reports
+  `Android build failed` before any Gradle work.
+- `cmdline-tools` must sit in the `cmdline-tools/latest/` layout, or Unity reports
+  `sdkmanager does not exist`. `platform-tools` and `build-tools` must also be installed.
+- The NDK must be **r27** (`ndk;27.2.12479018`). r23 is rejected with a bare
+  `Android NDK not found`, which is misleading because the directory is valid.
+- `cmake;3.22.1` must be installed in the SDK, or the build stops at `Missing CMake 3.22.1`.
+- Delete `.utmp` between builds when switching NDK or CMake. A stale
+  `hash_key.txt` reference fails the CMake configure step.
+- Gradle writes into the project as root; `sudo rm -rf .utmp Library/Bee Library/Android` clears
+  a cache the current user cannot remove.
 
 `run-tests.sh` compiles with Mono `mcs` from `/workspace/unity/Editor/Data/MonoBleedingEdge/bin`.
 Anything touching `UnityEngine` must be added to its exclusion list — a new UI/input file will
@@ -31,8 +62,8 @@ otherwise break the harness with `CS0246 MonoBehaviour`.
 
 ## CI
 
-- `.github/workflows/build-apk.yml` builds the APK; the local container has no Unity licence
-  and no `AndroidPlayer` module, so CI is the only build path.
+- `.github/workflows/build-apk.yml` builds the APK; it is the reproducible path, since the
+  local toolchain above has to be assembled by hand.
 - The `test` job runs in `unityci/editor:ubuntu-6000.0.85f2-base-4.0.0` so it uses the same
   Mono as the player build; set `UNITY_DATA=/opt/unity/Editor/Data` for `run-tests.sh`.
 - `containerRegistryImageVersion` must stay at `4`; line 3 fails with "No sdkmanager found"
