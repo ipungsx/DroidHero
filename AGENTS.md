@@ -1,6 +1,6 @@
-# Band Hero — repository notes
+# Droid Hero — repository notes
 
-Unity 6 (6000.0.85f2) Android rhythm game in `BandHero/`. Charts are downloaded from
+Unity 6 (6000.0.85f2) Android rhythm game in `DroidHero/`. Charts are downloaded from
 enchor.us; audio comes from the player's device to avoid shipping copyrighted recordings.
 
 ## Verifying changes
@@ -8,7 +8,7 @@ enchor.us; audio comes from the player's device to avoid shipping copyrighted re
 The quickest check needs no Unity licence:
 
 ```bash
-BandHero/tools/run-tests.sh /tmp/sample.sng        # headless suite, needs a chart file
+DroidHero/tools/run-tests.sh /tmp/sample.sng        # headless suite, needs a chart file
 ./compile_check.sh                                  # runtime scripts vs real UnityEngine
 ./compile_check_editor.sh                           # Editor scripts vs UnityEditor
 ```
@@ -24,9 +24,9 @@ export JAVA_HOME=/workspace/unity/jdk
 export ANDROID_SDK_ROOT=/workspace/unity/sdk
 export ANDROID_NDK_ROOT=/workspace/unity/sdk/ndk/27.2.12479018
 /workspace/unity/Editor/Unity -batchmode -nographics -quit \
-  -projectPath "$PWD/BandHero" -buildTarget Android \
-  -executeMethod BandHero.EditorTools.BuildAndroid.BuildFromCommandLine \
-  -logFile "$PWD/BandHero/build.log"
+  -projectPath "$PWD/DroidHero" -buildTarget Android \
+  -executeMethod DroidHero.EditorTools.BuildAndroid.BuildFromCommandLine \
+  -logFile "$PWD/DroidHero/build.log"
 ```
 
 The toolchain is not installed by default. Getting it in place took these steps, and each one
@@ -51,12 +51,12 @@ The editor licence lives in the container's home directory, so a container resta
 Then every build stops at `No valid Unity Editor license found` and the log shows
 `Processed 0 license files`. You do not need to re-activate Unity to ship an APK: the previous
 successful build leaves a complete Gradle project in
-`BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle`, with `libil2cpp.so`, `libunity.so` and the
+`DroidHero/Library/Bee/Android/Prj/IL2CPP/Gradle`, with `libil2cpp.so`, `libunity.so` and the
 Unity data already staged. Bump `versionName`/`versionCode` in `launcher/build.gradle` and
 `gradle.properties`, then run Gradle from that directory:
 
 ```bash
-cd BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle
+cd DroidHero/Library/Bee/Android/Prj/IL2CPP/Gradle
 export JAVA_HOME=/workspace/unity/jdk ANDROID_HOME=/workspace/unity/sdk
 java -Xmx4096M -cp "/workspace/unity/Editor/Data/PlaybackEngines/AndroidPlayer/Tools/gradle/lib/*" \
   org.gradle.launcher.GradleMain assembleRelease --no-daemon
@@ -66,7 +66,7 @@ Do not pass `--offline`: the Android Gradle plugin is resolved through the plugi
 offline fails at configuration. The result lands in `launcher/build/outputs/apk/release/`.
 That path re-signs and re-packages native code that is already there. To ship a **C# change**
 without a licence, rebuild the IL2CPP stages by hand from the recorded Tundra DAG
-(`BandHero/Library/Bee/Player*.dag.json`), which stores the exact command line of every node:
+(`DroidHero/Library/Bee/Player*.dag.json`), which stores the exact command line of every node:
 
 1. Compile `Assets/Scripts` with the saved Roslyn response file
    (`Library/Bee/artifacts/*/Assembly-CSharp.rsp`) into
@@ -105,7 +105,7 @@ otherwise break the harness with `CS0246 MonoBehaviour`.
   streaming path is not optional.
 - Unity cannot read `content://` URIs, so the Java picker copies the chosen file into app
   storage before returning a path.
-- `GameplayHud` owns the back button during play; `BandHeroApp.Update` must not also handle it
+- `GameplayHud` owns the back button during play; `DroidHeroApp.Update` must not also handle it
   or pause toggles twice.
 
 ## CI
@@ -123,6 +123,6 @@ otherwise break the harness with `CS0246 MonoBehaviour`.
   activates from the command line. That is why a password is mandatory even for Personal, and
   why a Google/SSO login has to set a Unity ID password first.
 - `BuildForCi` reads `-customBuildPath`, which game-ci sets to
-  `build/Android/BandHero.apk`; the artifact upload expects that exact path.
+  `build/Android/DroidHero.apk`; the artifact upload expects that exact path.
 - Roslyn aborts with an ICU error in this image unless
   `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` is set.
