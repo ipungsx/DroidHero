@@ -52,7 +52,25 @@ namespace DroidHero.Gameplay
         float _overdriveTarget;
         float _overdrivePulse;
 
-        public bool LightShowEnabled { get; set; } = true;
+        bool _lightShowEnabled = true;
+
+        /// <summary>
+        /// Turns the whole show on or off.
+        ///
+        /// Switching it off has to hide the decorative renderers outright, not just stop
+        /// animating them: confetti and beams are positioned by their tick, so freezing them
+        /// leaves the shards in the row they were built in, straight across the middle of the
+        /// screen. That frozen row is what looked like a rendering glitch with the show off.
+        /// </summary>
+        public bool LightShowEnabled
+        {
+            get => _lightShowEnabled;
+            set
+            {
+                _lightShowEnabled = value;
+                ApplyShowVisibility();
+            }
+        }
 
         /// <summary>Turned off by the frame budget on slow devices; the lights stay on.</summary>
         public bool BeamShowEnabled
@@ -61,10 +79,7 @@ namespace DroidHero.Gameplay
             set
             {
                 _beamsEnabled = value;
-                for (int i = 0; i < _beams.Length; i++)
-                {
-                    if (_beams[i] != null) _beams[i].enabled = value;
-                }
+                ApplyShowVisibility();
             }
         }
 
@@ -75,10 +90,7 @@ namespace DroidHero.Gameplay
             set
             {
                 _confettiEnabled = value;
-                for (int i = 0; i < _confetti.Length; i++)
-                {
-                    if (_confetti[i] != null) _confetti[i].enabled = value;
-                }
+                ApplyShowVisibility();
             }
         }
 
@@ -108,6 +120,9 @@ namespace DroidHero.Gameplay
             BuildBackLights();
             BuildBeams();
             BuildConfetti();
+
+            // The show switch is set before Build, when there was nothing to hide yet.
+            ApplyShowVisibility();
         }
 
         /// <summary>
@@ -324,6 +339,33 @@ namespace DroidHero.Gameplay
             for (int i = 0; i < _lights.Length; i++)
             {
                 if (_lights[i] != null) _lights[i].enabled = i < _lightsEnabled;
+            }
+        }
+
+        /// <summary>
+        /// Reconciles every decorative renderer with both the show switch and the frame-budget
+        /// flags, so turning the show back on cannot resurrect something the budget dropped.
+        /// </summary>
+        void ApplyShowVisibility()
+        {
+            for (int i = 0; i < _lights.Length; i++)
+            {
+                if (_lights[i] != null) _lights[i].enabled = _lightShowEnabled && i < _lightsEnabled;
+            }
+
+            for (int i = 0; i < _backRow.Length; i++)
+            {
+                if (_backRow[i] != null) _backRow[i].enabled = _lightShowEnabled;
+            }
+
+            for (int i = 0; i < _beams.Length; i++)
+            {
+                if (_beams[i] != null) _beams[i].enabled = _lightShowEnabled && _beamsEnabled;
+            }
+
+            for (int i = 0; i < _confetti.Length; i++)
+            {
+                if (_confetti[i] != null) _confetti[i].enabled = _lightShowEnabled && _confettiEnabled;
             }
         }
 

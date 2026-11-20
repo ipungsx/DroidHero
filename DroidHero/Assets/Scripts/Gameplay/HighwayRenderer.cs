@@ -16,9 +16,25 @@ namespace DroidHero.Gameplay
     {
         const float LaneSegments = 10f;
 
+        /// <summary>
+        /// Fret button size at rest, as a fraction of the lane width. Pressing pops the cap up
+        /// and toward the player, so a tap reads as a physical button being struck rather than
+        /// as a colour change.
+        /// </summary>
+        const float FretRestScale = 0.86f;
+        const float FretPressedScale = 1.00f;
+
+        /// <summary>How far a pressed fret lifts toward the camera, in world units.</summary>
+        const float FretLift = 0.16f;
+
+        /// <summary>Spring constants for the press pop: stiff enough to snap, damped to settle.</summary>
+        const float FretSpringStiffness = 420f;
+        const float FretSpringDamping = 21f;
+
         public HighwayLayout Layout = new HighwayLayout();
 
         readonly List<ActiveNote> _visible = new List<ActiveNote>(256);
+        readonly bool[] _fretCustomArt = new bool[LaneInfo.Count];
         readonly SpriteRenderer[] _laneBackdrops = new SpriteRenderer[LaneInfo.Count];
         readonly SpriteRenderer[] _laneFlashes = new SpriteRenderer[LaneInfo.Count];
         readonly SpriteRenderer[] _laneEdges = new SpriteRenderer[LaneInfo.Count];
@@ -27,6 +43,8 @@ namespace DroidHero.Gameplay
 
         readonly float[] _laneFlashTimers = new float[LaneInfo.Count];
         readonly float[] _fretPressScale = new float[LaneInfo.Count];
+        readonly float[] _fretPressVelocity = new float[LaneInfo.Count];
+        readonly SpriteRenderer[] _fretShadows = new SpriteRenderer[LaneInfo.Count];
 
         NoteViewPool _pool;
         NoteTracker _tracker;
@@ -138,16 +156,32 @@ namespace DroidHero.Gameplay
                 glowRenderer.transform.localScale = Vector3.one * (Layout.LaneWidth * 1.55f);
                 _fretGlows[lane] = glowRenderer;
 
+                // A dark shadow disc under the cap. It is what sells the button as sitting on
+                // top of the highway, and it grows as the cap sinks, so the press has depth.
+                var shadow = new GameObject("FretShadow" + lane);
+                shadow.transform.SetParent(backdrop.transform, false);
+                var shadowRenderer = shadow.AddComponent<SpriteRenderer>();
+                shadowRenderer.sprite = ProceduralSprites.Circle;
+                shadowRenderer.color = new Color(0f, 0f, 0f, 0.55f);
+                shadowRenderer.sortingOrder = 24;
+                shadowRenderer.transform.position = new Vector3(Layout.LaneCenterX(lane),
+                                                                Layout.HitLineY - FretLift * 0.35f, 0f);
+                shadowRenderer.transform.localScale = Vector3.one * (Layout.LaneWidth * FretRestScale * 1.04f);
+                _fretShadows[lane] = shadowRenderer;
+
                 var fret = new GameObject("Fret" + lane);
                 fret.transform.SetParent(backdrop.transform, false);
                 var fretRenderer = fret.AddComponent<SpriteRenderer>();
-                fretRenderer.sprite = ProceduralSprites.Circle;
-                fretRenderer.color = LaneTheme.DimForLane(lane);
+                fretRenderer.sprite = ProceduralSprites.FretArt(lane);
+                _fretCustomArt[lane] = ProceduralSprites.HasCustomFretArt(lane);
+                fretRenderer.color = _fretCustomArt[lane]
+                    ? Color.white
+                    : LaneTheme.DimForLane(lane);
                 fretRenderer.sortingOrder = 25;
                 fretRenderer.transform.position = new Vector3(Layout.LaneCenterX(lane), Layout.HitLineY, 0f);
-                fretRenderer.transform.localScale = Vector3.one * (Layout.LaneWidth * 0.70f);
+                fretRenderer.transform.localScale = Vector3.one * (Layout.LaneWidth * FretRestScale);
                 _fretButtons[lane] = fretRenderer;
-                _fretPressScale[lane] = 0.70f;
+                _fretPressScale[lane] = FretRestScale;
             }
 
             var overlay = new GameObject("StarPowerOverlay");
@@ -344,7 +378,15 @@ namespace DroidHero.Gameplay
 
             for (int i = 0; i < _visible.Count; i++)
             {
-                DrawNote(_visible[i], songTime);
+                ActiveNote note = _visible[i];
+
+                // The far end of the highway is a horizon, so a note is only drawn once it has
+                // come over it. Without this the gem appears in empty sky above the stage.
+                // Notes behind the strike line still draw: a miss has to be seen falling past
+                // the line, and a hit note's flash is anchored where the player struck it.
+                if (Layout.TimeToY(note.Time, songTime) > Layout.TopY + 0.001f) continue;
+
+                DrawNote(note, songTime);
             }
 
             UpdateLaneFeedback(heldLanes);
@@ -366,18 +408,24 @@ namespace DroidHero.Gameplay
             if (note.IsSustain && !note.SustainBroken)
             {
                 float tailY = Layout.TimeToY(note.EndTime, songTime);
-                float sustainHeight = Mathf.Max(0f, Mathf.Min(tailY, Layout.TopY + radius) - headY);
+                float sustainHeight = Mathf.Max(0f, Mathf.Min(tailY, Layout.TopY) - headY);
 
                 if (sustainHeight > 0.02f)
                 {
                     Color sustainColor = color;
                     sustainColor.a = hit ? 0.55f : 0.32f;
 
+                    // The tail is on the same receding plane as the head, so it has to taper.
+                    // A single quad cannot taper, so it takes the width at its midpoint, which
+                    // is within a few percent of the true trapezoid at this scale.
+                    float midY = headY + sustainHeight * 0.5f;
+                    float midWidth = Layout.LaneWidthAt(midY) * 0.46f;
+
                     view.Sustain.enabled = true;
                     view.Sustain.color = sustainColor;
-                    view.Sustain.transform.position = new Vector3(laneX, headY + sustainHeight * 0.5f, 0f);
-                    view.Sustain.transform.localScale = new Vector3(
-                        radius * 1.15f, sustainHeight, 1f);
+                    view.Sustain.transform.position = new Vector3(
+                        Layout.LaneCenterXAt(note.Lane, midY), midY, 0f);
+                    view.Sustain.transform.localScale = new Vector3(midWidth, sustainHeight, 1f);
                 }
             }
 
@@ -529,17 +577,39 @@ namespace DroidHero.Gameplay
                 if (_fretButtons[lane] == null) continue;
 
                 bool held = heldLanes[lane];
-                float target = held ? 0.86f : 0.70f;
 
-                // Ease the press instead of snapping, so a fast run reads as motion.
-                _fretPressScale[lane] = Mathf.Lerp(_fretPressScale[lane], target, delta * 18f);
+                // A damped spring drives the size, so the cap overshoots slightly on the way up
+                // and settles back down. That overshoot is what makes the press feel like a
+                // physical button popping toward the player rather than a lerped scale.
+                float target = held ? FretPressedScale : FretRestScale;
+                float offset = _fretPressScale[lane] - target;
+                _fretPressVelocity[lane] += (-FretSpringStiffness * offset -
+                                             FretSpringDamping * _fretPressVelocity[lane]) * delta;
+                _fretPressScale[lane] += _fretPressVelocity[lane] * delta;
 
-                _fretButtons[lane].color = held
-                    ? Color.Lerp(LaneTheme.ForLane(lane), Color.white, 0.45f)
-                    : LaneTheme.DimForLane(lane);
+                float press = Mathf.InverseLerp(FretRestScale, FretPressedScale, _fretPressScale[lane]);
+                press = Mathf.Clamp01(press);
+
+                _fretButtons[lane].color = _fretCustomArt[lane]
+                    ? Color.white
+                    : (held
+                        ? Color.Lerp(LaneTheme.ForLane(lane), Color.white, 0.45f)
+                        : LaneTheme.DimForLane(lane));
 
                 _fretButtons[lane].transform.localScale =
                     Vector3.one * (Layout.LaneWidth * _fretPressScale[lane]);
+
+                // Lifting the cap toward the camera reads as "timbul"; the shadow stays put and
+                // spreads a little, which is what sells the height.
+                _fretButtons[lane].transform.position = new Vector3(
+                    Layout.LaneCenterX(lane), Layout.HitLineY + FretLift * press, 0f);
+
+                if (_fretShadows[lane] != null)
+                {
+                    _fretShadows[lane].transform.localScale = Vector3.one *
+                        (Layout.LaneWidth * FretRestScale * (1.04f + press * 0.22f));
+                    _fretShadows[lane].color = new Color(0f, 0f, 0f, 0.55f - press * 0.18f);
+                }
 
                 Color fretGlow = LaneTheme.ForLane(lane);
                 fretGlow.a = held ? 0.75f : 0.20f;

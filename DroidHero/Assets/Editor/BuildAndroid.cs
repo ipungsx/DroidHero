@@ -165,8 +165,8 @@ namespace DroidHero.EditorTools
             PlayerSettings.companyName = "Droid Hero";
             PlayerSettings.productName = "Droid Hero";
             PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.droidhero.game");
-            PlayerSettings.bundleVersion = "1.4.0";
-            PlayerSettings.Android.bundleVersionCode = 6;
+            PlayerSettings.bundleVersion = "1.5.0";
+            PlayerSettings.Android.bundleVersionCode = 9;
 
             // Portrait only, and OS autorotation off: the highway is a tall shape and the
             // menus are laid out top to bottom, so a landscape rotation has nowhere to put

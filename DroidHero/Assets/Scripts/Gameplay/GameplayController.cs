@@ -129,8 +129,8 @@ namespace DroidHero.Gameplay
                 }
             }
 
-            if (_hud != null && _hud.IsPaused) return;
-
+            // Quit is raised from the pause menu, so it has to be handled before the paused
+            // early-out below or the request is never read and the button appears dead.
             if (_hud != null && _hud.QuitRequested)
             {
                 // A quit ends the run without results, so the session is reported as null.
@@ -139,6 +139,8 @@ namespace DroidHero.Gameplay
                 Finished?.Invoke(null);
                 return;
             }
+
+            if (_hud != null && _hud.IsPaused) return;
 
             float time = SongTime;
             Session.Update(time, Time.deltaTime);

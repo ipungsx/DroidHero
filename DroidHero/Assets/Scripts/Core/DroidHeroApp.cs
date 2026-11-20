@@ -52,6 +52,11 @@ namespace DroidHero.Core
         Vector2 _searchScroll;
         Vector2 _boardScroll;
         Vector2 _themeScroll;
+
+        readonly UiSkin.DragScroller _songDrag = new UiSkin.DragScroller();
+        readonly UiSkin.DragScroller _searchDrag = new UiSkin.DragScroller();
+        readonly UiSkin.DragScroller _boardDrag = new UiSkin.DragScroller();
+        readonly UiSkin.DragScroller _themeDrag = new UiSkin.DragScroller();
         int _searchPage = 1;
 
         /// <summary>Difficulty the running (or last) song was actually loaded at.</summary>
@@ -447,6 +452,7 @@ namespace DroidHero.Core
 
             float rowHeight = Scale(136);
             var content = new Rect(0, 0, view.width - Scale(20), AppState.Songs.Count * rowHeight);
+            _songScroll = _songDrag.Apply(view, _songScroll, content.height);
             _songScroll = GUI.BeginScrollView(view, _songScroll, content);
 
             for (int i = 0; i < AppState.Songs.Count; i++)
@@ -464,8 +470,8 @@ namespace DroidHero.Core
                 float textX = art.xMax + Scale(16);
                 float textWidth = Mathf.Max(Scale(120), row.width - (textX - row.x) - Scale(140));
 
-                GUI.Label(new Rect(textX, row.y + Scale(18), textWidth, Scale(36)),
-                          song.DisplayName, UiSkin.CenterBold);
+                UiSkin.FittedTitle(new Rect(textX, row.y + Scale(14), textWidth, Scale(40)),
+                             song.DisplayName, TextAnchor.MiddleLeft, 22);
                 GUI.Label(new Rect(textX, row.y + Scale(56), textWidth, Scale(30)),
                           song.Subtitle, UiSkin.Small);
                 GUI.Label(new Rect(textX, row.y + Scale(88), textWidth, Scale(28)),
@@ -536,8 +542,8 @@ namespace DroidHero.Core
             float textWidth = panelX + panelWidth - textX;
 
             float textStep = artSide / Scale(150);
-            GUI.Label(new Rect(textX, art.y + Scale(6) * textStep, textWidth, Scale(44) * textStep),
-                      song.DisplayName, UiSkin.CenterBold);
+            UiSkin.FittedTitle(new Rect(textX, art.y + Scale(6) * textStep, textWidth, Scale(44) * textStep),
+                         song.DisplayName, TextAnchor.MiddleCenter, 24);
             GUI.Label(new Rect(textX, art.y + Scale(54) * textStep, textWidth, Scale(32) * textStep),
                       song.Artist, UiSkin.Small);
             GUI.Label(new Rect(textX, art.y + Scale(90) * textStep, textWidth, Scale(30) * textStep),
@@ -714,6 +720,7 @@ namespace DroidHero.Core
 
             float rowHeight = Scale(150);
             var content = new Rect(0, 0, listView.width - Scale(20), _searchResult.data.Length * rowHeight);
+            _searchScroll = _searchDrag.Apply(listView, _searchScroll, content.height);
             _searchScroll = GUI.BeginScrollView(listView, _searchScroll, content);
 
             for (int i = 0; i < _searchResult.data.Length; i++)
@@ -724,8 +731,8 @@ namespace DroidHero.Core
 
                 float textWidth = Mathf.Max(Scale(120), row.width - Scale(170) - Scale(16));
 
-                GUI.Label(new Rect(row.x + Scale(16), row.y + Scale(14), textWidth, Scale(34)),
-                          chart.name ?? "Untitled", UiSkin.CenterBold);
+                UiSkin.FittedTitle(new Rect(row.x + Scale(16), row.y + Scale(14), textWidth, Scale(36)),
+                             chart.name ?? "Untitled", TextAnchor.MiddleLeft, 22);
                 GUI.Label(new Rect(row.x + Scale(16), row.y + Scale(50), textWidth, Scale(28)),
                           (chart.artist ?? "Unknown") + "  ·  " + (chart.charter ?? ""), UiSkin.Small);
                 GUI.Label(new Rect(row.x + Scale(16), row.y + Scale(80), textWidth, Scale(28)),
@@ -866,6 +873,7 @@ namespace DroidHero.Core
 
             float rowHeight = Scale(84);
             var content = new Rect(0, 0, view.width - Scale(20), best.Count * rowHeight);
+            _boardScroll = _boardDrag.Apply(view, _boardScroll, content.height);
             _boardScroll = GUI.BeginScrollView(view, _boardScroll, content);
 
             for (int i = 0; i < best.Count; i++)
@@ -962,6 +970,7 @@ namespace DroidHero.Core
                                     Mathf.Max(Scale(120), toggleY - Scale(122) - Scale(12)));
             var content = new Rect(0, 0, listView.width - Scale(20), GameplayTheme.Count * rowHeight);
 
+            _themeScroll = _themeDrag.Apply(listView, _themeScroll, content.height);
             _themeScroll = GUI.BeginScrollView(listView, _themeScroll, content);
 
             for (int i = 0; i < GameplayTheme.Count; i++)

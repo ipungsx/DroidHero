@@ -1,4 +1,5 @@
 using UnityEngine;
+using DroidHero.Chart;
 
 namespace DroidHero.UI
 {
@@ -19,6 +20,7 @@ namespace DroidHero.UI
         static Sprite _guitar;
         static Sprite _gloss;
         static Sprite _confetti;
+        static Sprite _buttonCap;
 
         public static Sprite White
         {
@@ -135,6 +137,71 @@ namespace DroidHero.UI
             {
                 if (_confetti == null) _confetti = CreateConfetti(32);
                 return _confetti;
+            }
+        }
+
+        /// <summary>
+        /// A controller face button: a coloured cap with a dark rim, a bevelled body and a
+        /// top-left specular. Drawn as luminance only, so a single sprite tints to any lane
+        /// colour and still reads as a physical button rather than a flat disc.
+        /// </summary>
+        public static Sprite ButtonCap
+        {
+            get
+            {
+                if (_buttonCap == null) _buttonCap = CreateButtonCap(128);
+                return _buttonCap;
+            }
+        }
+
+        static readonly Sprite[] _fretOverride = new Sprite[LaneInfo.Count];
+        static bool _fretOverrideChecked;
+
+        /// <summary>
+        /// Fret art for a lane: <c>fret_0.png</c> … <c>fret_4.png</c> dropped into
+        /// <c>persistentDataPath/frets</c>, or the built-in button cap when no file is there.
+        ///
+        /// The built-in cap is generated rather than shipped as an image, so the game carries no
+        /// third-party artwork. A player who wants a specific controller look can supply their
+        /// own files, which also keeps them clear of anyone else's copyright.
+        /// </summary>
+        public static Sprite FretArt(int lane) => HasCustomFretArt(lane) ? _fretOverride[lane] : ButtonCap;
+
+        /// <summary>True when the player supplied their own art for this lane.</summary>
+        public static bool HasCustomFretArt(int lane)
+        {
+            if (lane < 0 || lane >= _fretOverride.Length) return false;
+
+            if (!_fretOverrideChecked)
+            {
+                _fretOverrideChecked = true;
+                LoadFretOverrides();
+            }
+
+            return _fretOverride[lane] != null;
+        }
+
+        static void LoadFretOverrides()
+        {
+            string directory = System.IO.Path.Combine(Application.persistentDataPath, "frets");
+            if (!System.IO.Directory.Exists(directory)) return;
+
+            for (int lane = 0; lane < _fretOverride.Length; lane++)
+            {
+                string path = System.IO.Path.Combine(directory, "fret_" + lane + ".png");
+
+                try
+                {
+                    if (!System.IO.File.Exists(path)) continue;
+
+                    Sprite sprite = FromTexture(System.IO.File.ReadAllBytes(path));
+                    if (sprite != null) _fretOverride[lane] = sprite;
+                }
+                catch (System.Exception error)
+                {
+                    // A corrupt or unreadable file must not cost the player the whole highway.
+                    Debug.LogWarning("Fret art " + path + " could not be loaded: " + error.Message);
+                }
             }
         }
 
@@ -537,6 +604,69 @@ namespace DroidHero.UI
                     }
 
                     pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        /// <summary>
+        /// A round controller button seen slightly from above: dark bezel, a bright cap inset
+        /// from it, a soft dome shading across the cap and a small specular highlight. The
+        /// sprite carries shading as brightness, so tinting it with a lane colour keeps the
+        /// moulded look instead of flattening into a solid disc.
+        /// </summary>
+        static Sprite CreateButtonCap(int size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+
+            var pixels = new Color32[size * size];
+            float half = size * 0.5f;
+            float outer = half - 1f;
+            float capRadius = outer * 0.80f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x - half + 0.5f;
+                    float dy = y - half + 0.5f;
+                    float distance = Mathf.Sqrt(dx * dx + dy * dy);
+
+                    // Bezel: opaque to the outer edge, then a one-pixel feather so the rim
+                    // stays smooth when the button is drawn small.
+                    float alpha = Mathf.Clamp01(outer - distance + 0.5f);
+                    if (alpha <= 0f)
+                    {
+                        pixels[y * size + x] = new Color32(255, 255, 255, 0);
+                        continue;
+                    }
+
+                    // 1 on the cap, 0 on the bezel, with a narrow transition between them.
+                    float cap = Mathf.Clamp01((capRadius - distance) * 3f + 0.5f);
+
+                    // Dome: brightest just above centre, falling off toward the cap edge, which
+                    // is what makes a flat disc read as a convex button.
+                    float dome = Mathf.Clamp01(1f - (distance / Mathf.Max(0.001f, capRadius)) * 0.55f);
+
+                    // Specular: a small hotspot up and to the left of centre.
+                    float sx = dx + capRadius * 0.34f;
+                    float sy = dy - capRadius * 0.34f;
+                    float spec = Mathf.Clamp01(1f - Mathf.Sqrt(sx * sx + sy * sy) / (capRadius * 0.62f));
+                    spec *= spec;
+
+                    float value = Mathf.Lerp(0.34f, dome, cap);
+                    value = Mathf.Clamp01(value + spec * 0.75f * cap);
+
+                    byte level = (byte)(Mathf.Clamp01(value) * 255f);
+                    pixels[y * size + x] = new Color32(level, level, level, (byte)(alpha * 255f));
                 }
             }
 

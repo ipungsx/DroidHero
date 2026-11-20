@@ -693,6 +693,25 @@ namespace DroidHero.Tests
             float behind = layout.TimeToY(9f, 10f);
             Check(ahead > layout.HitLineY, "a future note is above the strike line");
             Check(behind < layout.HitLineY, "a past note is below the strike line");
+
+            // The approach is a perspective projection, so equal time steps must cover
+            // shrinking distances as they recede: a note has to crawl in near the horizon and
+            // rush at the player. A linear ramp would give equal steps here.
+            float nearStep = layout.TimeToY(10.2f, 10f) - layout.TimeToY(10.1f, 10f);
+            float farStep = layout.TimeToY(11.5f, 10f) - layout.TimeToY(11.4f, 10f);
+            Check(farStep < nearStep, "notes cover less screen per second as they recede");
+            Check(farStep < nearStep * 0.75f, "the perspective compression is visible, not a rounding artifact");
+
+            // The far end of the approach window is exactly the horizon, and anything beyond it
+            // is clipped. Without that clip a gem would appear in empty sky above the stage
+            // instead of arriving from the front.
+            float atHorizon = layout.TimeToY(10f + layout.ApproachSeconds, 10f);
+            Check(Math.Abs(atHorizon - layout.TopY) < 0.001f,
+                  "a note one approach window out lands on the horizon");
+            Check(layout.IsVisible(atHorizon), "a note on the horizon is drawn");
+
+            float beyond = layout.TimeToY(10f + layout.ApproachSeconds + 0.5f, 10f);
+            Check(!layout.IsVisible(beyond), "a note past the horizon is clipped, not drawn in the sky");
         }
 
         /// <summary>

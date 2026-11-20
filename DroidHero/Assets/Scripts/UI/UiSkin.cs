@@ -46,6 +46,9 @@ namespace DroidHero.UI
         static GUIStyle _textField;
         static GUIStyle _center;
         static GUIStyle _centerBold;
+        static GUIStyle _songTitle;
+        static GUIStyle _songTitleCentered;
+        static GUIStyle _titleFit;
 
         public static Texture2D PanelTex => _panelTex != null ? _panelTex : (_panelTex = Solid(Panel));
         public static Texture2D PanelLightTex => _panelLightTex != null ? _panelLightTex : (_panelLightTex = Solid(PanelLight));
@@ -254,6 +257,126 @@ namespace DroidHero.UI
             fontSize = ScaledSize(24),
             fontStyle = FontStyle.Bold
         });
+
+        /// <summary>
+        /// A song title that has to survive an arbitrary name. Chart names routinely run past
+        /// forty characters, so the label wraps instead of overflowing the row, and clips rather
+        /// than bleeding into the artist line underneath.
+        /// </summary>
+        public static GUIStyle SongTitle => _songTitle ?? (_songTitle = new GUIStyle(CenterBold)
+        {
+            fontSize = ScaledSize(18),
+            alignment = TextAnchor.UpperLeft,
+            wordWrap = true,
+            clipping = TextClipping.Clip
+        });
+
+        /// <summary>Song title inside the detail panel, centred over the artist line.</summary>
+        public static GUIStyle SongTitleCentered => _songTitleCentered ?? (_songTitleCentered = new GUIStyle(SongTitle)
+        {
+            alignment = TextAnchor.UpperCenter
+        });
+
+        /// <summary>
+        /// Draws a bold label shrunk until it fits its box.
+        ///
+        /// Chart names are arbitrary and often long, and a fixed font size lets them overflow
+        /// into the artist line or the button beside them. Measuring first and scaling the font
+        /// down keeps every row the same shape whatever the name is.
+        /// </summary>
+        public static void FittedTitle(Rect rect, string text, TextAnchor anchor = TextAnchor.MiddleLeft,
+                                 int maxSize = 24, int minSize = 11)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            if (_titleFit == null) _titleFit = new GUIStyle(CenterBold);
+
+            _titleFit.alignment = anchor;
+            _titleFit.wordWrap = false;
+            _titleFit.clipping = TextClipping.Clip;
+            _titleFit.fontSize = ScaledSize(maxSize);
+
+            Vector2 measured = _titleFit.CalcSize(new GUIContent(text));
+            float scale = 1f;
+            if (measured.x > rect.width && measured.x > 0f) scale = rect.width / measured.x;
+            if (measured.y > rect.height && measured.y > 0f) scale = Mathf.Min(scale, rect.height / measured.y);
+
+            _titleFit.fontSize = Mathf.Max(ScaledSize(minSize), Mathf.RoundToInt(_titleFit.fontSize * scale));
+            GUI.Label(rect, text, _titleFit);
+        }
+
+        /// <summary>
+        /// Drag-to-scroll for a list, driven by the finger.
+        ///
+        /// IMGUI's scroll view only moves for a mouse wheel or a drag on its scrollbar, and a
+        /// phone offers neither, so any list taller than its view was stuck. This returns the
+        /// scroll position the finger asks for; the caller still passes it to
+        /// <see cref="GUI.BeginScrollView"/> so clipping and the wheel keep working.
+        /// </summary>
+        public sealed class DragScroller
+        {
+            int _finger = -1;
+            Vector2 _last;
+            bool _dragging;
+
+            public Vector2 Apply(Rect view, Vector2 scroll, float contentHeight)
+            {
+                float limit = Mathf.Max(0f, contentHeight - view.height);
+                float travel = 0f;
+
+                for (int i = 0; i < Input.touchCount; i++)
+                {
+                    Touch touch = Input.GetTouch(i);
+
+                    if (touch.phase == TouchPhase.Began)
+                    {
+                        // GUI rects measure from the top, touches from the bottom.
+                        var point = new Vector2(touch.position.x, Screen.height - touch.position.y);
+                        if (_finger < 0 && view.Contains(point))
+                        {
+                            _finger = touch.fingerId;
+                            _last = touch.position;
+                        }
+                    }
+                    else if (touch.fingerId == _finger)
+                    {
+                        if (touch.phase == TouchPhase.Moved)
+                        {
+                            travel += touch.position.y - _last.y;
+                            _last = touch.position;
+                        }
+                        else if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+                        {
+                            _finger = -1;
+                        }
+                    }
+                }
+
+                // The editor sends no touches, so a mouse drag stands in for a finger there.
+                if (Input.touchCount == 0)
+                {
+                    var point = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+
+                    if (Input.GetMouseButtonDown(0) && view.Contains(point))
+                    {
+                        _dragging = true;
+                        _last = Input.mousePosition;
+                    }
+                    else if (_dragging && Input.GetMouseButton(0))
+                    {
+                        travel += Input.mousePosition.y - _last.y;
+                        _last = Input.mousePosition;
+                    }
+                    else if (_dragging && !Input.GetMouseButton(0))
+                    {
+                        _dragging = false;
+                    }
+                }
+
+                scroll.y = Mathf.Clamp(scroll.y + travel, 0f, limit);
+                return scroll;
+            }
+        }
 
         public static GUIStyle Button => _button ?? (_button = new GUIStyle
         {
