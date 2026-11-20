@@ -108,10 +108,26 @@ assert env.file.save() == pristine    # if this fails, do not ship the patched f
 
 Then rename and save. The result must still report `byte_start % 16 == 0` for every object.
 
+`tools/rename_scene_object.py` does all of the above and is the only supported way to
+rename the root object:
+
+```
+python3 tools/rename_scene_object.py \
+  Library/Bee/artifacts/Android/Split/level0/level0 /tmp/level0 BandHero DroidHero
+```
+
 Verify by concatenating `globalgamemanagers.assets.split*` and parsing it with UnityPy: every
 `MonoScript` should report the new namespace, and the `path_id` the scene points at should
 resolve to the new class. A `grep -c BandHero` over every entry in the finished APK has to
 reach zero — checking only the `.so` and `global-metadata.dat` misses this entirely.
+
+`tools/verify_apk.py` performs that audit plus the alignment, ELF and metadata checks in one
+pass. It exits non-zero on the shipped v1.4.0 and zero on a good build, so run it on every
+APK before publishing:
+
+```
+python3 tools/verify_apk.py Builds/DroidHero-v1.4.1.apk
+```
 
 ## Packaging by hand
 
