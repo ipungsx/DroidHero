@@ -126,7 +126,7 @@ pass. It exits non-zero on the shipped v1.4.0 and zero on a good build, so run i
 APK before publishing:
 
 ```
-python3 tools/verify_apk.py Builds/DroidHero-v1.4.1.apk
+python3 tools/verify_apk.py Builds/DroidHero-v1.5.0.apk
 ```
 
 ## A throwing `Awake` looks exactly like a black screen
