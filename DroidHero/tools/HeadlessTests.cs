@@ -57,6 +57,7 @@ namespace DroidHero.Tests
             TestLeaderboardClear();
             TestSongDifficultyStore();
             TestEnchorSearchRequest();
+            TestSearchTextEditor();
             TestOverdriveMilestone();
 
             Console.WriteLine();
@@ -1034,6 +1035,66 @@ namespace DroidHero.Tests
 
             Check(EnchorSearchRequest.Build("", 1, "guitar", "hard").Contains("\"difficulty\":\"hard\""),
                   "every valid difficulty passes through unchanged");
+        }
+
+        /// <summary>
+        /// The editable search box. It replaces IMGUI's text field on the enchor screen, so the
+        /// editing rules have to hold without a keyboard or a GUI pass to exercise them.
+        /// </summary>
+        static void TestSearchTextEditor()
+        {
+            Console.WriteLine();
+            Console.WriteLine("Search text editor");
+
+            var editor = new SearchTextEditor();
+            Check(editor.IsEmpty, "a new editor is empty");
+
+            editor.Type("metallica");
+            Check(editor.Text == "metallica", "typing appends (" + editor.Text + ")");
+            Check(!editor.IsEmpty, "a typed editor is not empty");
+
+            editor.Backspace();
+            Check(editor.Text == "metallic", "backspace removes the last character (" + editor.Text + ")");
+
+            editor.Type("a!");
+            Check(editor.Text == "metallica!", "typing resumes after a backspace (" + editor.Text + ")");
+
+            // The platform keyboard reports the whole value at once, so Set has to replace it
+            // rather than append to whatever the field held before.
+            editor.Set("dragonforce");
+            Check(editor.Text == "dragonforce", "Set replaces the whole value (" + editor.Text + ")");
+
+            editor.Set("");
+            Check(editor.IsEmpty, "Set to empty clears the field");
+
+            editor.Backspace();
+            Check(editor.IsEmpty, "backspace on an empty field is harmless");
+
+            editor.Clear();
+            Check(editor.IsEmpty, "clear empties the field");
+
+            // Control characters arrive from keyboards as Enter and Delete; they must not end up
+            // in the query, which is sent as JSON to the search endpoint.
+            editor.Type("a\tb\nc");
+            Check(editor.Text == "abc", "control characters are dropped (" + editor.Text + ")");
+
+            editor.Type("x\by");
+            Check(editor.Text == "abcy", "a backspace character deletes inside typed text (" + editor.Text + ")");
+
+            editor.Clear();
+            editor.Type(new string('z', SearchTextEditor.MaxLength + 20));
+            Check(editor.Text.Length == SearchTextEditor.MaxLength,
+                  "the field stops at " + SearchTextEditor.MaxLength + " characters (" + editor.Text.Length + ")");
+
+            // A long paste must not discard what the player already typed.
+            editor.Clear();
+            editor.Type("abc");
+            editor.Type(new string('q', SearchTextEditor.MaxLength));
+            Check(editor.Text.StartsWith("abc"), "a full field keeps the existing text");
+            Check(editor.Text.Length == SearchTextEditor.MaxLength, "a full field stays at the limit");
+
+            editor.Type(null);
+            Check(editor.Text.Length == SearchTextEditor.MaxLength, "typing null changes nothing");
         }
 
         /// <summary>

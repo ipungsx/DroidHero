@@ -106,6 +106,11 @@ otherwise break the harness with `CS0246 MonoBehaviour`.
 
 ## Gotchas
 
+- Never use `GUI.TextField`, `GUI.PasswordField` or `TouchScreenKeyboard` on a device build.
+  All three reach the Android input-method service, and that path takes the whole screen down
+  with an exception thrown from `OnGUI`; the player sees a frozen or black screen instead of a
+  field. `DroidHeroApp.DrawSearchKeyboard` draws the letters as ordinary `GUI.Button`s for this
+  reason. Stick to `Button`, `Label`, `DrawTexture` and `BeginScrollView` in any new UI.
 - `ProjectSettings/ProjectVersion.txt` must carry the real revision (`b028303d8e7d`), not zeros.
 - Charts embed Ogg Opus, which Unity cannot decode; `Assets/Plugins/Concentus/Concentus.dll`
   plus the streaming clip factory handle it. A full song is ~100 MB of float samples, so the

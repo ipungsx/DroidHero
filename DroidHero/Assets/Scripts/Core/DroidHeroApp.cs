@@ -44,7 +44,8 @@ namespace DroidHero.Core
         Screen _previousScreen = Screen.Menu;
         float _fittedAspect;
 
-        string _searchQuery = "";
+        readonly SearchTextEditor _searchText = new SearchTextEditor();
+        bool _keyboardOpen;
         EnchorSearchResult _searchResult;
         bool _searching;
         string _status = "";
@@ -243,6 +244,7 @@ namespace DroidHero.Core
 
         void GoToMenu()
         {
+            _keyboardOpen = false;
             _screen = Screen.Menu;
             _fade = 0f;
             if (_backdrop != null) _backdrop.Pulse();
@@ -250,6 +252,7 @@ namespace DroidHero.Core
 
         void GoTo(Screen screen)
         {
+            _keyboardOpen = false;
             _previousScreen = _screen;
             _screen = screen;
             _fade = 0f;
@@ -657,8 +660,16 @@ namespace DroidHero.Core
             float buttonsWidth = buttonWidth * 2f + gap;
             float fieldWidth = Mathf.Max(Scale(120), w - Scale(40) - buttonsWidth - Scale(12));
 
-            _searchQuery = GUI.TextField(new Rect(Scale(20), searchY, fieldWidth, fieldHeight),
-                                         _searchQuery ?? "", 64, UiSkin.TextField);
+            // The field is drawn and hit-tested as a button because IMGUI's own text field is
+            // what broke this screen: it is the only widget that drives the platform keyboard,
+            // and that path threw on a device. Typing uses the in-game keyboard below, which
+            // stays on the same IMGUI calls every other menu already draws with.
+            if (GUI.Button(new Rect(Scale(20), searchY, fieldWidth, fieldHeight),
+                           _searchText.IsEmpty ? "Tap to type a song or artist" : _searchText.Text,
+                           _searchText.IsEmpty ? UiSkin.TextFieldPrompt : UiSkin.TextField))
+            {
+                _keyboardOpen = true;
+            }
 
             float buttonsX = Scale(20) + fieldWidth + Scale(12);
 
@@ -702,6 +713,14 @@ namespace DroidHero.Core
                       "Page " + _searchPage + (hasResults ? "  ·  " + _searchResult.found + " charts found" : ""),
                       UiSkin.Tiny);
 
+            // The keyboard takes the list's place rather than floating over it: the list is
+            // scrollable, and a panel on top would swallow the drag that scrolls it.
+            if (_keyboardOpen)
+            {
+                DrawSearchKeyboard(pagerY + Scale(64), w - Scale(40));
+                return;
+            }
+
             var listView = new Rect(Scale(20), pagerY + Scale(64), w - Scale(40),
                                     Mathf.Max(Scale(120), ContentBottom - pagerY - Scale(64)));
 
@@ -726,6 +745,11 @@ namespace DroidHero.Core
             for (int i = 0; i < _searchResult.data.Length; i++)
             {
                 EnchorChart chart = _searchResult.data[i];
+
+                // JsonUtility writes a JSON null element as a null reference, and the API is
+                // free to send one, so a row is skipped rather than dereferenced blind.
+                if (chart == null) continue;
+
                 var row = new Rect(0, i * rowHeight, content.width, rowHeight - Scale(12));
                 UiSkin.Card(row, new Color(0.10f, 0.10f, 0.15f, 0.94f));
 
@@ -1179,6 +1203,71 @@ namespace DroidHero.Core
             _status = "Audio attached to " + song.DisplayName;
         }
 
+        /// <summary>
+        /// On-screen keyboard for the search box.
+        ///
+        /// IMGUI's text field and the platform keyboard behind it are the two things that took
+        /// this screen down, so the letters are ordinary buttons: same draw path, same hit test,
+        /// nothing that reaches the native input method.
+        /// </summary>
+        void DrawSearchKeyboard(float top, float width)
+        {
+            const string rows = "QWERTYUIOP|ASDFGHJKL|ZXCVBNM";
+
+            float keyGap = Scale(4);
+            float keyHeight = Scale(54);
+            float y = top;
+
+            foreach (string row in rows.Split('|'))
+            {
+                float keyWidth = (width - keyGap * (row.Length - 1)) / row.Length;
+
+                for (int i = 0; i < row.Length; i++)
+                {
+                    var key = new Rect(Scale(20) + i * (keyWidth + keyGap), y, keyWidth, keyHeight);
+                    string letter = row[i].ToString();
+
+                    if (GUI.Button(key, letter, UiSkin.Button)) _searchText.Type(letter);
+                }
+
+                y += keyHeight + keyGap;
+            }
+
+            float actionWidth = (width - keyGap * 3f) / 4f;
+
+            if (GUI.Button(new Rect(Scale(20), y, actionWidth, keyHeight), "SPACE", UiSkin.Button))
+                _searchText.Type(" ");
+
+            if (GUI.Button(new Rect(Scale(20) + actionWidth + keyGap, y, actionWidth, keyHeight),
+                           "DEL", UiSkin.Button))
+                _searchText.Backspace();
+
+            if (GUI.Button(new Rect(Scale(20) + (actionWidth + keyGap) * 2f, y, actionWidth, keyHeight),
+                           "CLEAR", UiSkin.ButtonGhost))
+                _searchText.Clear();
+
+            if (GUI.Button(new Rect(Scale(20) + (actionWidth + keyGap) * 3f, y, actionWidth, keyHeight),
+                           "DONE", UiSkin.ButtonAccent))
+            {
+                _keyboardOpen = false;
+                _searchPage = 1;
+                StartCoroutine(RunSearch());
+            }
+
+            float closeY = y + keyHeight + keyGap;
+            float closeWidth = (width - keyGap) / 2f;
+
+            if (GUI.Button(new Rect(Scale(20), closeY, closeWidth, Scale(46)), "HIDE", UiSkin.ButtonGhost))
+                _keyboardOpen = false;
+
+            if (GUI.Button(new Rect(Scale(20) + closeWidth + keyGap, closeY, closeWidth, Scale(46)),
+                           "BACK", UiSkin.ButtonGhost))
+            {
+                _keyboardOpen = false;
+                GoBack();
+            }
+        }
+
         IEnumerator RunSearch()
         {
             _searching = true;
@@ -1186,7 +1275,7 @@ namespace DroidHero.Core
 
             // No difficulty filter: the API would then only return charts rated for that one
             // level. The song screen offers the difficulties each chart actually contains.
-            yield return StartCoroutine(_enchor.Search(_searchQuery, _searchPage, EnchorClient.InstrumentGuitar,
+            yield return StartCoroutine(_enchor.Search(_searchText.Text, _searchPage, EnchorClient.InstrumentGuitar,
                                                        null,
                                                        result => _searchResult = result,
                                                        error => _status = error));

@@ -44,6 +44,7 @@ namespace DroidHero.UI
         static GUIStyle _buttonAccent;
         static GUIStyle _buttonGhost;
         static GUIStyle _textField;
+        static GUIStyle _textFieldPrompt;
         static GUIStyle _center;
         static GUIStyle _centerBold;
         static GUIStyle _songTitle;
@@ -420,6 +421,13 @@ namespace DroidHero.UI
             border = new RectOffset(24, 24, 24, 24),
             normal = { background = RoundedLightTex, textColor = TextPrimary },
             focused = { background = RoundedLightTex, textColor = TextPrimary }
+        });
+
+        /// <summary>Same box as <see cref="TextField"/>, muted while the field is still empty.</summary>
+        public static GUIStyle TextFieldPrompt => _textFieldPrompt ?? (_textFieldPrompt = new GUIStyle(TextField)
+        {
+            normal = { background = RoundedLightTex, textColor = TextMuted },
+            focused = { background = RoundedLightTex, textColor = TextMuted }
         });
 
         /// <summary>Draws a flat colour quad; used for separators, bars and highlights.</summary>
