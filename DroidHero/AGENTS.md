@@ -47,6 +47,32 @@ Skipping any of steps 4 and 5 leaves an APK that builds and installs fine but st
 the old code. Check with `md5sum` on the APK's `lib/<abi>/libil2cpp.so` against the objcopy
 output, not with `nm` — the stripped library keeps no local symbols.
 
+### Renaming a class does not rename the scene's copy of it
+
+Steps 1–5 above rebuild the managed and native code, but nothing re-serialises the player
+data. A `MonoScript` stores the class name and namespace as plain strings in
+`globalgamemanagers.assets`, and the scene's `MonoBehaviour` reaches its class through a
+`path_id` into that table. Rename a class and relink by hand, and the metadata says
+`DroidHero.Core.DroidHeroApp` while the table still says `BandHero.Core.BandHeroApp`, so
+the component resolves to nothing and the app boots to a black screen.
+
+A real Editor build re-serialises those files. Without a licence, patch them directly: both
+`m_ClassName` and `m_Namespace` are length-prefixed, 4-byte-aligned strings, so a same-size
+overwrite keeps every later offset valid. That works whenever the new string lands in the same
+aligned field: `BandHero.Gameplay` (17) and `DroidHero.Gameplay` (18) both round to 20, and
+`BandHeroApp` (11) and `DroidHeroApp` (12) both round to 12. A bare `BandHero` (8) does not
+fit `DroidHero` (9), which is why the scene's root object was renamed with UnityPy instead.
+
+```
+globalgamemanagers.assets.split0: 39 namespaces and class names
+level0: 1, the scene's root GameObject m_Name
+```
+
+Verify by concatenating `globalgamemanagers.assets.split*` and parsing it with UnityPy: every
+`MonoScript` should report the new namespace, and the `path_id` the scene points at should
+resolve to the new class. A `grep -c BandHero` over every entry in the finished APK has to
+reach zero — checking only the `.so` and `global-metadata.dat` misses this entirely.
+
 ## Packaging by hand
 
 The Gradle template under `Library/Bee/Android/Prj/IL2CPP/Gradle/` is generated once and
