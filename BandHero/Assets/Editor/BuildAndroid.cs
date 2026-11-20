@@ -165,8 +165,8 @@ namespace BandHero.EditorTools
             PlayerSettings.companyName = "Band Hero";
             PlayerSettings.productName = "Band Hero";
             PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.bandhero.game");
-            PlayerSettings.bundleVersion = "1.0.0";
-            PlayerSettings.Android.bundleVersionCode = 1;
+            PlayerSettings.bundleVersion = "1.1.0";
+            PlayerSettings.Android.bundleVersionCode = 2;
 
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;
