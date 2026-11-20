@@ -129,6 +129,29 @@ APK before publishing:
 python3 tools/verify_apk.py Builds/DroidHero-v1.4.1.apk
 ```
 
+## A throwing `Awake` looks exactly like a black screen
+
+`DroidHeroApp` draws its entire UI from `OnGUI` under a fade that starts at `0`. If `Awake`
+throws, `Update` never runs, `_fade` never advances, and the app sits on the camera's
+`(0.05, 0.05, 0.08)` clear colour with no menu and no log unless you are watching logcat.
+v1.4.1 shipped that way: `Awake` gained `Screen.orientation = ScreenOrientation.Portrait`,
+which is redundant because both `AndroidManifest.xml` (`screenOrientation="portrait"`) and
+`ProjectSettings.asset` (`defaultScreenOrientation: 0`, `useOSAutorotation: 0`) already
+force portrait. It was removed in v1.4.2, and `Awake` is now wrapped in `try`/`catch` that
+reports through `_status` so a future startup fault is visible instead of silent.
+
+## Metadata usage indices are baked into every object file
+
+Adding or removing any method call changes `Il2CppMetadataUsage.c`, and the runtime type
+tokens in it are referenced by index from the other generated `.cpp` files. Removing the
+single `set_orientation` call shifted every later token by 4. Rebuilding only the files whose
+source text changed therefore produces a library that links but reads the wrong types.
+
+After any C# change, recompile **all** `Compiling Cpp/C for libil2cpp` nodes for both ABIs,
+not just the ones whose generated source differs. The full set is 252 nodes and takes a few
+minutes with `ThreadPoolExecutor(max_workers=8)`. The build is deterministic: a full rebuild
+and an incremental one produce byte-identical `libil2cpp.so`.
+
 ## Packaging by hand
 
 The Gradle template under `Library/Bee/Android/Prj/IL2CPP/Gradle/` is generated once and

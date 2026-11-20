@@ -72,26 +72,31 @@ namespace DroidHero.Core
 
         void Awake()
         {
-            Application.targetFrameRate = 60;
-            QualitySettings.vSyncCount = 0;
-            UnityEngine.Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            // Wrapped so a startup fault is reported in logcat instead of leaving the app on the
+            // camera's near-black clear colour with nothing to go on.
+            try
+            {
+                Application.targetFrameRate = 60;
+                QualitySettings.vSyncCount = 0;
+                UnityEngine.Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
-            // Portrait is the only layout the menus and the five-lane highway are sized for, so
-            // it is enforced at runtime as well as in the manifest: a device that ignores the
-            // manifest's screenOrientation would otherwise rotate mid-song.
-            UnityEngine.Screen.orientation = ScreenOrientation.Portrait;
+                _library = new SongLibrary();
+                _enchor = new EnchorClient();
+                _picker = new LocalAudioPicker();
 
-            _library = new SongLibrary();
-            _enchor = new EnchorClient();
-            _picker = new LocalAudioPicker();
+                _settings = GameSettings.Load(SaveRoot);
+                _leaderboard = new Leaderboard(SaveRoot);
+                LaneTheme.Select(_settings.ThemeIndex);
 
-            _settings = GameSettings.Load(SaveRoot);
-            _leaderboard = new Leaderboard(SaveRoot);
-            LaneTheme.Select(_settings.ThemeIndex);
-
-            SetupCamera();
-            BuildBackdrop();
-            RefreshLibrary();
+                SetupCamera();
+                BuildBackdrop();
+                RefreshLibrary();
+            }
+            catch (Exception error)
+            {
+                _status = "Startup failed: " + error.Message;
+                Debug.LogException(error);
+            }
         }
 
         void SetupCamera()
@@ -177,15 +182,26 @@ namespace DroidHero.Core
             UiSkin.Fill(new Rect(0, 0, UnityEngine.Screen.width, UnityEngine.Screen.height),
                         new Color(0.03f, 0.03f, 0.06f, 0.58f));
 
-            switch (_screen)
+            try
             {
-                case Screen.Menu: DrawMenu(); break;
-                case Screen.SongSelect: DrawSongSelect(); break;
-                case Screen.EnchorSearch: DrawEnchorSearch(); break;
-                case Screen.Results: DrawResults(); break;
-                case Screen.Leaderboard: DrawLeaderboard(); break;
-                case Screen.Themes: DrawThemes(); break;
-                case Screen.Calibration: DrawCalibration(); break;
+                switch (_screen)
+                {
+                    case Screen.Menu: DrawMenu(); break;
+                    case Screen.SongSelect: DrawSongSelect(); break;
+                    case Screen.EnchorSearch: DrawEnchorSearch(); break;
+                    case Screen.Results: DrawResults(); break;
+                    case Screen.Leaderboard: DrawLeaderboard(); break;
+                    case Screen.Themes: DrawThemes(); break;
+                    case Screen.Calibration: DrawCalibration(); break;
+                }
+            }
+            catch (Exception error)
+            {
+                // A screen that throws on every frame would otherwise leave only the scrim
+                // above, which reads as a black screen. Fall back to the menu and say why.
+                _status = _screen + " screen failed: " + error.Message;
+                _screen = Screen.Menu;
+                Debug.LogException(error);
             }
 
             GUI.color = previous;
