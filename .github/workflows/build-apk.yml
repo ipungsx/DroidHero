@@ -38,7 +38,7 @@ jobs:
           ls -lh /tmp/chart.sng
 
       - name: Run headless tests
-        working-directory: BandHero
+        working-directory: DroidHero
         run: ./tools/run-tests.sh /tmp/chart.sng
 
   build:
@@ -67,11 +67,11 @@ jobs:
         if: steps.licence.outputs.present == 'true'
         uses: actions/cache@v4
         with:
-          path: BandHero/Library
-          key: Library-BandHero-Android-${{ hashFiles('BandHero/Assets/**', 'BandHero/Packages/**', 'BandHero/ProjectSettings/**') }}
+          path: DroidHero/Library
+          key: Library-DroidHero-Android-${{ hashFiles('DroidHero/Assets/**', 'DroidHero/Packages/**', 'DroidHero/ProjectSettings/**') }}
           restore-keys: |
-            Library-BandHero-Android-
-            Library-BandHero-
+            Library-DroidHero-Android-
+            Library-DroidHero-
 
       - name: Build
         if: steps.licence.outputs.present == 'true'
@@ -81,10 +81,10 @@ jobs:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          projectPath: BandHero
+          projectPath: DroidHero
           targetPlatform: Android
-          buildMethod: BandHero.EditorTools.BuildAndroid.BuildForCi
-          buildName: BandHero
+          buildMethod: DroidHero.EditorTools.BuildAndroid.BuildForCi
+          buildName: DroidHero
           buildsPath: build
           # Image line 4 carries the ANDROID_HOME fix for Unity 6; line 3 fails
           # with "No sdkmanager found" on these editor versions.
@@ -95,8 +95,8 @@ jobs:
         if: steps.licence.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: BandHero-apk
-          path: build/Android/BandHero.apk
+          name: DroidHero-apk
+          path: build/Android/DroidHero.apk
           if-no-files-found: error
 
       - name: Upload Unity log on failure
@@ -104,5 +104,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unity-log
-          path: BandHero/Logs
+          path: DroidHero/Logs
           if-no-files-found: ignore
