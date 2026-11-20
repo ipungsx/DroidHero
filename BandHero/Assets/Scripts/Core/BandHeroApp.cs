@@ -489,27 +489,48 @@ namespace BandHero.Core
             float panelWidth = Mathf.Min(Scale(680), w - Scale(40));
             float panelX = (w - panelWidth) * 0.5f;
 
-            var art = new Rect(panelX, Scale(122), Scale(150), Scale(150));
+            // The panel is a fixed stack of rows. On a short phone with the status toast up the
+            // stack would run under the toast, so the art shrinks and the gaps compress; the
+            // buttons keep their tap size.
+            float top = Scale(122);
+            float artSide = Scale(150);
+            float ghostRow = song.HasLocalAudio ? Scale(56) : 0f;
+            float fixedHeight = artSide + Scale(62) + Scale(34) + Scale(78) + Scale(64) + ghostRow;
+            float gapTotal = Scale(46 + 22 + 18 + 16) + (song.HasLocalAudio ? Scale(16) : 0f);
+
+            float room = ContentBottom - top;
+            if (fixedHeight > room)
+            {
+                artSide = Mathf.Max(Scale(96), artSide - (fixedHeight - room));
+                fixedHeight = artSide + Scale(62) + Scale(34) + Scale(78) + Scale(64) + ghostRow;
+            }
+
+            float gapScale = Mathf.Clamp01((room - fixedHeight) / Mathf.Max(1f, gapTotal));
+            float Gap(float value) => Scale(value) * gapScale;
+
+            var art = new Rect(panelX, top, artSide, artSide);
             DrawAlbumArt(song, art);
 
             float textX = art.xMax + Scale(20);
             float textWidth = panelX + panelWidth - textX;
 
-            GUI.Label(new Rect(textX, art.y + Scale(6), textWidth, Scale(44)),
+            float textStep = artSide / Scale(150);
+            GUI.Label(new Rect(textX, art.y + Scale(6) * textStep, textWidth, Scale(44) * textStep),
                       song.DisplayName, UiSkin.CenterBold);
-            GUI.Label(new Rect(textX, art.y + Scale(54), textWidth, Scale(32)), song.Artist, UiSkin.Small);
-            GUI.Label(new Rect(textX, art.y + Scale(90), textWidth, Scale(30)),
+            GUI.Label(new Rect(textX, art.y + Scale(54) * textStep, textWidth, Scale(32) * textStep),
+                      song.Artist, UiSkin.Small);
+            GUI.Label(new Rect(textX, art.y + Scale(90) * textStep, textWidth, Scale(30) * textStep),
                       LengthText(song) + (song.HasLocalAudio ? "  ·  local audio" : "  ·  chart audio"),
                       UiSkin.Tiny);
-            GUI.Label(new Rect(textX, art.y + Scale(120), textWidth, Scale(30)),
+            GUI.Label(new Rect(textX, art.y + Scale(120) * textStep, textWidth, Scale(30) * textStep),
                       song.Charter.Length > 0 ? "charted by " + song.Charter : "charter unknown", UiSkin.Tiny);
 
-            float chipTop = art.yMax + Scale(46);
+            float chipTop = art.yMax + Gap(46);
             var chipRect = new Rect(panelX, chipTop, panelWidth, Scale(62));
             DrawDifficultyRow(chipRect, panelWidth, song);
 
             // Best score for the difficulty currently selected, so the chip choice has context.
-            float bestY = chipTop + Scale(84);
+            float bestY = chipRect.yMax + Gap(22);
             GUI.Label(new Rect(panelX, bestY, panelWidth, Scale(34)),
                       "Best on " + DifficultyFor(song) + ": " +
                       _leaderboard.BestScore(song.DisplayName, DifficultyFor(song)).ToString("N0"),
@@ -518,7 +539,7 @@ namespace BandHero.Core
             float buttonWidth = Mathf.Min(Scale(560), w - Scale(40));
             float buttonX = (w - buttonWidth) * 0.5f;
             float halfWidth = (buttonWidth - Scale(16)) * 0.5f;
-            float startY = bestY + Scale(52);
+            float startY = bestY + Scale(34) + Gap(18);
 
             if (GUI.Button(new Rect(buttonX, startY, buttonWidth, Scale(78)), "START", UiSkin.ButtonAccent))
             {
@@ -526,20 +547,22 @@ namespace BandHero.Core
                 return;
             }
 
-            if (GUI.Button(new Rect(buttonX, startY + Scale(94), halfWidth, Scale(64)),
+            float secondaryY = startY + Scale(78) + Gap(16);
+
+            if (GUI.Button(new Rect(buttonX, secondaryY, halfWidth, Scale(64)),
                            song.HasLocalAudio ? "CHANGE AUDIO" : "USE MY AUDIO", UiSkin.Button))
             {
                 StartCoroutine(AttachLocalAudio(song));
             }
 
-            if (GUI.Button(new Rect(buttonX + halfWidth + Scale(16), startY + Scale(94), halfWidth, Scale(64)),
+            if (GUI.Button(new Rect(buttonX + halfWidth + Scale(16), secondaryY, halfWidth, Scale(64)),
                            "BACK TO LIST", UiSkin.Button))
             {
                 AppState.SelectedSong = null;
             }
 
             if (song.HasLocalAudio &&
-                GUI.Button(new Rect(buttonX, startY + Scale(174), buttonWidth, Scale(56)),
+                GUI.Button(new Rect(buttonX, secondaryY + Scale(64) + Gap(16), buttonWidth, Scale(56)),
                            "USE CHART AUDIO INSTEAD", UiSkin.ButtonGhost))
             {
                 _library.DetachLocalAudio(song);
