@@ -152,6 +152,38 @@ not just the ones whose generated source differs. The full set is 252 nodes and 
 minutes with `ThreadPoolExecutor(max_workers=8)`. The build is deterministic: a full rebuild
 and an incremental one produce byte-identical `libil2cpp.so`.
 
+`tools/relink_il2cpp.py --dll <Assembly-CSharp.dll>` replays all five stages from the DAG and
+is the supported way to do this. Three things it guards against, each of which produced an
+APK that built and installed but still ran the previous release:
+
+**The DLL's file name becomes the assembly name.** Compiling to `DroidHero.dll` makes
+UnityLinker write `DroidHero.dll` into `ManagedStripped/` and leave the stale
+`Assembly-CSharp.dll` beside it, and il2cpp then converts the stale one. Compile to
+`Assembly-CSharp.dll`. The script refuses any other name and checks that the stripped DLL is
+newer than its input.
+
+**il2cpp can add parts that the DAG never names.** A C# change grew `Assembly-CSharp` from
+three parts to four, so `Assembly-CSharp__3.cpp` had no compile node. The link then failed on
+undefined symbols, because the recorded link lists every object explicitly. Compile the
+generated `.cpp` files, not the recorded list, and append the extra objects to the link.
+
+**The output directory holds more than the generated C++.** `bdwgc`, `libil2cpp` helpers and
+the two-arm assembly stubs compile into the same directory and the recorded `llvm-ar` names
+them. Rebuilding the archive from that directory alone drops them; the link then fails on
+symbols from `Mono.Security`. Replay the recorded `ar` command and do not clear `.o` files
+that have no matching `.cpp`.
+
+Putting a new object in both the archive and the link command line fails with duplicate
+symbols, so the extras belong on the command line only.
+
+Verify by symbol, not by exit code. The stripped `.so` keeps no local symbols, so compare
+`md5sum` of `lib/<abi>/libil2cpp.so` in the APK against the objcopy output, and check that
+`global-metadata.dat` contains the new method names:
+
+```
+strings -a .../Managed/Metadata/global-metadata.dat | grep -c AutoStrumChords
+```
+
 ## Packaging by hand
 
 The Gradle template under `Library/Bee/Android/Prj/IL2CPP/Gradle/` is generated once and
@@ -165,8 +197,11 @@ distribution directly:
 ```
 JAVA_HOME=/workspace/unity/jdk /workspace/unity/jdk/bin/java -Xmx4096m \
   -cp "/workspace/unity/Editor/Data/PlaybackEngines/AndroidPlayer/Tools/gradle/lib/*" \
-  org.gradle.launcher.GradleMain --offline :launcher:assembleRelease
+  org.gradle.launcher.GradleMain :launcher:assembleRelease
 ```
+
+Drop `--offline` on a fresh container: `~/.gradle/caches/modules-2` starts empty and the
+Android Gradle Plugin has to be fetched once. Later builds work offline.
 
 The APK lands in `launcher/build/outputs/apk/release/launcher-release.apk`. Check its
 identity with `aapt2 dump badging` and its orientation with

@@ -48,6 +48,7 @@ namespace DroidHero.Gameplay
 
             PollTouches();
             RefreshHeldState();
+            Session.AutoStrumChords(_held);
         }
 
         void PollKeyboard()

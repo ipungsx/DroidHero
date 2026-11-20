@@ -10,6 +10,8 @@ namespace UnityEngine
     {
         public static float Max(float a, float b) => a > b ? a : b;
 
+        public static float Min(float a, float b) => a < b ? a : b;
+
         public static float Abs(float value) => value < 0f ? -value : value;
 
         public static float Clamp(float value, float min, float max)

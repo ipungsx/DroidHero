@@ -67,6 +67,13 @@ namespace DroidHero.Gameplay
 
         public int Strum(System.Collections.Generic.IList<bool> heldLanes) => Tracker.Strum(heldLanes);
 
+        /// <summary>
+        /// Lands any chord whose lanes are all held, so a chord never needs a third finger on
+        /// the strum strip. Returns how many notes it resolved.
+        /// </summary>
+        public int AutoStrumChords(System.Collections.Generic.IList<bool> heldLanes) =>
+            Tracker.AutoStrumChords(heldLanes);
+
         public void ReleaseFret(int lane) => Tracker.ReleaseLane(lane);
 
         public bool ActivateStarPower() => _score.ActivateStarPower();

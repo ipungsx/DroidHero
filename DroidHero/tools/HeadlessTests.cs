@@ -59,6 +59,10 @@ namespace DroidHero.Tests
             TestEnchorSearchRequest();
             TestSearchTextEditor();
             TestOverdriveMilestone();
+            TestChordInput();
+            TestSingleNoteStillNeedsStrum();
+            TestStrumOrderIndependence();
+            TestSustainTail();
 
             Console.WriteLine();
             Console.WriteLine(_failures == 0
@@ -66,6 +70,38 @@ namespace DroidHero.Tests
                 : _failures + " FAILURE(S) of " + _checks + " checks");
 
             return _failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// A long note must draw a tail that is actually visible: tall enough to read as a bar
+        /// and as wide as a good fraction of its lane, not the hairline the old sprite produced.
+        /// </summary>
+        static void TestSustainTail()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- sustain tail ---");
+
+            var layout = new HighwayLayout();
+            float headY = layout.HitLineY;
+
+            // Two seconds of sustain at the strike line, and one whose end is past the horizon.
+            float endY = layout.TimeToY(2f, 0f);
+            HighwayLayout.TailQuad tail = layout.SustainTail(headY, endY, 2);
+
+            Check(tail.Visible, "a sustained note draws a tail");
+            Check(tail.Height > 0.5f, "the tail is tall (" + tail.Height.ToString("F2") + " units)");
+            Check(tail.Width > layout.LaneWidth * 0.2f,
+                  "the tail is lane-wide (" + tail.Width.ToString("F2") + " units)");
+            Check(System.Math.Abs(tail.CenterY - (headY + tail.Height * 0.5f)) < 0.001f,
+                  "the tail starts at the note head");
+
+            HighwayLayout.TailQuad clipped = layout.SustainTail(headY, layout.TopY + 40f, 0);
+            Check(clipped.Visible, "a long tail still draws");
+            Check(clipped.CenterY + clipped.Height * 0.5f <= layout.TopY + 0.001f,
+                  "a long tail stops at the horizon instead of drawing into the sky");
+
+            HighwayLayout.TailQuad tiny = layout.SustainTail(headY, headY + 0.005f, 1);
+            Check(!tiny.Visible, "a note too short to read draws no tail");
         }
 
         static void TestSngContainer(string path)
@@ -1098,9 +1134,109 @@ namespace DroidHero.Tests
         }
 
         /// <summary>
-        /// The score milestone reward. It has to fire on score, fire once per threshold, expire
-        /// on its own, and double the multiplier only while it is running.
+        /// A chord must land from the frets alone: no third finger on the strum strip.
+        ///
+        /// This drives the tracker the way the touch layer does. Fingers land a few frames apart,
+        /// then the per-frame pass sees every lane of the chord held and resolves it.
         /// </summary>
+        static void TestChordInput()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- chord input ---");
+
+            SongChart chart = ChordChart();
+            var session = new GameSession(chart);
+
+            var held = new bool[LaneInfo.Count];
+
+            // Fingers land a few frames apart, as they do on a real screen.
+            session.Update(0.98f, 1f / 60f);
+            session.PressFret(0, false);
+            held[0] = true;
+            int early = session.AutoStrumChords(held);
+            Check(early == 0, "a half-held chord does not resolve early (" + early + ")");
+
+            session.Update(1.00f, 1f / 60f);
+            session.PressFret(1, false);
+            held[1] = true;
+            int hits = session.AutoStrumChords(held);
+
+            Check(hits == 2, "holding both frets lands the chord (hit " + hits + "/2)");
+            Check(session.Score.NotesHit == 2,
+                  "chord counts two hits (" + session.Score.NotesHit + ")");
+            Check(session.Score.NotesMissed == 0,
+                  "chord misses nothing (" + session.Score.NotesMissed + ")");
+            Check(session.Score.MaxCombo == 2,
+                  "chord keeps combo through both notes (" + session.Score.MaxCombo + ")");
+
+            // A chord must not resolve twice: the second pass over the same held lanes is a no-op.
+            int again = session.AutoStrumChords(held);
+            Check(again == 0, "a landed chord does not resolve twice (" + again + ")");
+        }
+
+        /// <summary>
+        /// The chord shortcut must not leak into single notes: those still need the strum, or the
+        /// whole chart would play itself.
+        /// </summary>
+        static void TestSingleNoteStillNeedsStrum()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- single note keeps its strum ---");
+
+            var chart = new SongChart { Name = "Single", Resolution = 192 };
+            chart.AddTempo(0, 120f);
+            chart.AddNote(384, 2, 0, false, 0);
+            chart.FinalizeChart();
+
+            var session = new GameSession(chart);
+            session.Update(1.00f, 1f / 60f);
+
+            var held = new bool[LaneInfo.Count];
+            held[2] = true;
+            session.PressFret(2, false);
+            int auto = session.AutoStrumChords(held);
+
+            Check(auto == 0, "a single note is not auto-strummed (" + auto + ")");
+            Check(session.Score.NotesHit == 0, "the single note is still pending");
+
+            int strummed = session.Strum(held);
+            Check(strummed == 1, "the strum lands the single note (" + strummed + ")");
+            Check(session.Score.NotesHit == 1, "the single note counts one hit");
+        }
+
+        /// <summary>
+        /// A fret pressed on the same frame as the strum has to count. Players tap and strum
+        /// together, and the held-lane view the strum reads is rebuilt after the touches.
+        /// </summary>
+        static void TestStrumOrderIndependence()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- press and strum on one frame ---");
+
+            SongChart chart = ChordChart();
+            var session = new GameSession(chart);
+            session.Update(1.00f, 1f / 60f);
+
+            session.PressFret(0, false);
+            var held = new bool[LaneInfo.Count];
+            held[0] = true;
+            held[1] = true;
+            int hits = session.Strum(held);
+
+            Check(hits >= 1, "a same-frame press and strum lands its own note (" + hits + ")");
+        }
+
+        /// <summary>A minimal chart holding one two-lane chord at t=1s.</summary>
+        static SongChart ChordChart()
+        {
+            var chart = new SongChart { Name = "Chord", Resolution = 192 };
+            chart.AddTempo(0, 120f);
+            chart.AddNote(384, 0, 0, false, 0);
+            chart.AddNote(384, 1, 0, false, 0);
+            chart.FinalizeChart();
+            return chart;
+        }
+
         static void TestOverdriveMilestone()
         {
             Console.WriteLine();

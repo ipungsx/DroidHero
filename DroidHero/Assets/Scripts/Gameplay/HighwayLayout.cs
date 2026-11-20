@@ -60,6 +60,38 @@ namespace DroidHero.Gameplay
         /// <summary>Half-width of a lane at an arbitrary height, used to size note heads.</summary>
         public float LaneWidthAt(float y) => LaneWidth * WidthScaleAt(y);
 
+        /// <summary>
+        /// Geometry of a sustain tail: where its quad sits and how big it is, in world units.
+        ///
+        /// The tail runs from the note head up to the note's end time. It is clipped at the
+        /// horizon, so a long note never draws into the sky above the stage. Width is taken at
+        /// the quad's midpoint because a single sprite cannot taper along its length.
+        /// </summary>
+        public struct TailQuad
+        {
+            public bool Visible;
+            public float CenterX;
+            public float CenterY;
+            public float Width;
+            public float Height;
+        }
+
+        public TailQuad SustainTail(float headY, float endY, int lane)
+        {
+            var quad = new TailQuad();
+            float top = Mathf.Min(endY, TopY);
+            float height = top - headY;
+            if (height <= 0.02f) return quad;
+
+            float midY = headY + height * 0.5f;
+            quad.Visible = true;
+            quad.CenterX = LaneCenterXAt(lane, midY);
+            quad.CenterY = midY;
+            quad.Width = LaneWidthAt(midY) * 0.62f;
+            quad.Height = height;
+            return quad;
+        }
+
         public float HighwayLeftX => LaneCenterX(0) - LaneWidth * 0.5f;
         public float HighwayRightX => LaneCenterX(LaneInfo.Count - 1) + LaneWidth * 0.5f;
 

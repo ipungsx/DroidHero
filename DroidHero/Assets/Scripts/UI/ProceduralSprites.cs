@@ -16,6 +16,7 @@ namespace DroidHero.UI
         static Sprite _ring;
         static Sprite _softRing;
         static Sprite _verticalFade;
+        static Sprite _sustainTail;
         static Sprite _beam;
         static Sprite _guitar;
         static Sprite _gloss;
@@ -91,6 +92,22 @@ namespace DroidHero.UI
             {
                 if (_verticalFade == null) _verticalFade = CreateVerticalFade(8, 64);
                 return _verticalFade;
+            }
+        }
+
+        /// <summary>
+        /// Sustain tail: a rounded bar, opaque at the note head and fading along its length.
+        ///
+        /// The sprite is exactly one world unit square so a tail can be sized in world units.
+        /// <see cref="VerticalFade"/> is only 0.08 units wide at its native pixels-per-unit, which
+        /// drew every tail as a hairline no matter what scale the renderer asked for.
+        /// </summary>
+        public static Sprite SustainTail
+        {
+            get
+            {
+                if (_sustainTail == null) _sustainTail = CreateSustainTail(32, 256);
+                return _sustainTail;
             }
         }
 
@@ -394,6 +411,52 @@ namespace DroidHero.UI
                 for (int x = 0; x < width; x++)
                 {
                     pixels[y * width + x] = new Color32(255, 255, 255, alpha);
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            return Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        /// <summary>
+        /// A rounded sustain bar: solid at the bottom (the note head end) and fading toward the
+        /// top, with soft sides so the tail reads as a neck rather than a rectangle.
+        ///
+        /// Unlike <see cref="CreateVerticalFade"/> this is sized in world units by its caller, so
+        /// the texture is a clean 1:1 unit square at 100 pixels per unit.
+        /// </summary>
+        static Sprite CreateSustainTail(int width, int height)
+        {
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+
+            var pixels = new Color32[width * height];
+            float halfWidth = (width - 1) * 0.5f;
+
+            for (int y = 0; y < height; y++)
+            {
+                float along = y / (float)(height - 1);
+
+                // Holds full strength for the first third, then falls away, so the tail reads as
+                // a body with a soft tip instead of a gradient the whole way up.
+                float lengthFade = Mathf.Clamp01((1f - along) * 1.45f);
+                lengthFade *= lengthFade;
+
+                for (int x = 0; x < width; x++)
+                {
+                    float across = Mathf.Abs(x - halfWidth) / Mathf.Max(0.0001f, halfWidth);
+
+                    // Rounded shoulders: full alpha in the middle, easing to zero at the edges.
+                    float sideFade = Mathf.Clamp01(1f - across * across * across);
+                    sideFade = Mathf.Sqrt(sideFade);
+
+                    float alpha = Mathf.Clamp01(lengthFade * sideFade);
+                    pixels[y * width + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
                 }
             }
 

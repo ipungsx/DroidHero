@@ -184,6 +184,66 @@ namespace DroidHero.Gameplay
             return hits;
         }
 
+        /// <summary>
+        /// Resolves a chord as soon as every one of its lanes is held.
+        ///
+        /// A chord is never a HOPO, so the ruleset wants a strum for it. On a phone that means
+        /// three fingers at once (two frets plus a thumb on the strum strip), which no player can
+        /// land reliably, so holding the whole chord counts as the strum. Single notes keep the
+        /// strum requirement.
+        /// </summary>
+        public int AutoStrumChords(IList<bool> heldLanes)
+        {
+            if (heldLanes == null) return 0;
+
+            int hits = 0;
+            int i = _cursor;
+
+            while (i < _notes.Count)
+            {
+                ActiveNote first = _notes[i];
+                if (first.Time > SongTime + HitWindow.Miss) break;
+
+                int groupEnd = i;
+                while (groupEnd < _notes.Count &&
+                       Math.Abs(_notes[groupEnd].Time - first.Time) <= ChordEpsilon)
+                {
+                    groupEnd++;
+                }
+
+                if (groupEnd - i > 1 && HitWindow.IsInWindow(SongTime - first.Time))
+                {
+                    bool allHeld = true;
+                    for (int g = i; g < groupEnd; g++)
+                    {
+                        ActiveNote note = _notes[g];
+                        if (note.State != NoteState.Pending) continue;
+                        if (note.Lane < 0 || note.Lane >= heldLanes.Count || !heldLanes[note.Lane])
+                        {
+                            allHeld = false;
+                            break;
+                        }
+                    }
+
+                    if (allHeld)
+                    {
+                        for (int g = i; g < groupEnd; g++)
+                        {
+                            if (_notes[g].State != NoteState.Pending) continue;
+                            if (Press(_notes[g].Lane, true) != null) hits++;
+                        }
+                    }
+                }
+
+                i = groupEnd;
+            }
+
+            return hits;
+        }
+
+        /// <summary>Notes this close in time belong to the same chord.</summary>
+        const float ChordEpsilon = 0.006f;
+
         /// <summary>Called when the player releases a fret during a sustain, breaking it.</summary>
         public void ReleaseLane(int lane)
         {

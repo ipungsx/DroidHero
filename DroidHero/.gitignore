@@ -9,3 +9,4 @@ UserSettings/
 build.log
 .utmp/
 *.apk
+__pycache__/
