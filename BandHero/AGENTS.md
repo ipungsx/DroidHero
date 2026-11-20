@@ -19,16 +19,30 @@ is not installable on a plain Linux editor.
 
 ## Rebuilding IL2CPP without the Editor
 
-When the native side is relinked by hand from the Bee DAG, the pipeline has four stages and
+When the native side is relinked by hand from the Bee DAG, the pipeline has five stages and
 each one silently keeps the previous file if you skip it:
 
-1. compile the generated C++ into `Library/Bee/artifacts/Android/<arch>/*.o`
-2. archive those objects into `il2cpp.a` and link `<arch>/libil2cpp.so`
-3. run `llvm-objcopy` over the linked `.so` to strip it — **the input is
+1. strip the assemblies with `UnityLinker` into
+   `Library/Bee/artifacts/Android/ManagedStripped/` — its input is
+   `Library/Bee/PlayerScriptAssemblies/Assembly-CSharp.dll`, so the freshly compiled DLL has
+   to be copied there first
+2. run `il2cpp --convert-to-cpp`, which regenerates both the C++ under
+   `Library/Bee/artifacts/Android/il2cppOutput/cpp/` and the metadata under
+   `il2cppOutput/data/`
+3. compile that C++ into `Library/Bee/artifacts/Android/<arch>/*.o`, archive it into
+   `il2cpp.a` and link `<arch>/libil2cpp.so`
+4. run `llvm-objcopy` over the linked `.so` to strip it — **the input is
    `Library/Bee/artifacts/objcopy_*/libil2cpp.dbg.so`, which must be overwritten with the
    fresh link first**
-4. copy the stripped `.so` into `unityLibrary/src/main/jniLibs/<abi>/` before Gradle runs
+5. copy the stripped `.so` into `unityLibrary/src/main/jniLibs/<abi>/` **and** copy
+   `il2cppOutput/data/Metadata/global-metadata.dat` plus
+   `il2cppOutput/data/Resources/mscorlib.dll-resources.dat` into
+   `unityLibrary/src/main/assets/bin/Data/Managed/{Metadata,Resources}/`, before Gradle runs
 
-Skipping step 3's copy or step 4 leaves an APK that builds and installs fine but still runs
+Stage 5's metadata half is the easiest to miss: type and string-literal names live in
+`global-metadata.dat`, not in the `.so`, so a stale copy gives an APK whose native code is new
+but whose type table still describes the old assemblies.
+
+Skipping any of steps 4 and 5 leaves an APK that builds and installs fine but still runs
 the old code. Check with `md5sum` on the APK's `lib/<abi>/libil2cpp.so` against the objcopy
 output, not with `nm` — the stripped library keeps no local symbols.

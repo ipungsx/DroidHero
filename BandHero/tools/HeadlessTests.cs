@@ -5,6 +5,7 @@ using BandHero.Audio;
 using BandHero.Chart;
 using BandHero.Gameplay;
 using BandHero.Core;
+using BandHero.Enchor;
 
 namespace BandHero.Tests
 {
@@ -55,6 +56,7 @@ namespace BandHero.Tests
             TestLeaderboard();
             TestLeaderboardClear();
             TestSongDifficultyStore();
+            TestEnchorSearchRequest();
 
             Console.WriteLine();
             Console.WriteLine(_failures == 0
@@ -952,6 +954,52 @@ namespace BandHero.Tests
                 }
             }
             Pass("notes are sorted by time");
+        }
+
+        /// <summary>
+        /// The search body must never carry an empty enum value: the endpoint answers 400 for
+        /// "difficulty":"" and for a missing page. These assertions pin the exact payload shape.
+        /// </summary>
+        static void TestEnchorSearchRequest()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- enchor search request ---");
+
+            string unfiltered = EnchorSearchRequest.Build("", 1, "guitar", null);
+
+            Check(!unfiltered.Contains("\"difficulty\""),
+                  "an unfiltered search omits difficulty (" + unfiltered + ")");
+            Check(unfiltered.Contains("\"search\":\"\""), "empty query is sent as an empty string");
+            Check(unfiltered.Contains("\"page\":1"), "page 1 is sent as a number");
+            Check(unfiltered.Contains("\"instrument\":\"guitar\""), "instrument is lowercased");
+            Check(unfiltered.Contains("\"drumType\":\"fourLane\""), "drumType is sent as fourLane");
+
+            string filtered = EnchorSearchRequest.Build("nirvana", 3, "guitar", "Expert");
+
+            Check(filtered.Contains("\"difficulty\":\"expert\""),
+                  "a chosen difficulty is lowercased (" + filtered + ")");
+            Check(!filtered.Contains("\"difficulty\":\"\""), "an empty difficulty is never sent");
+            Check(filtered.Contains("\"page\":3"), "the requested page is sent");
+
+            Check(EnchorSearchRequest.Build("", 0, null, null).Contains("\"page\":1"),
+                  "page 0 is clamped to 1, which the endpoint rejects");
+            Check(EnchorSearchRequest.Build("", 1, null, null).Contains("\"instrument\":\"guitar\""),
+                  "a missing instrument falls back to guitar");
+            Check(EnchorSearchRequest.Build("", 1, "Bass", null).Contains("\"instrument\":\"bass\""),
+                  "instrument casing is normalised");
+
+            string quoted = EnchorSearchRequest.Build("say \"hi\"", 1, "guitar", null);
+
+            Check(quoted.Contains("\\\"hi\\\""), "quotes in the query are escaped (" + quoted + ")");
+            Check(quoted.Contains("\"search\":\"say \\\"hi\\\"\""), "an escaped query stays valid JSON");
+
+            string newline = EnchorSearchRequest.Build("a\nb", 1, "guitar", null);
+
+            Check(newline.Contains("\\n") && !newline.Contains("\n"),
+                  "newlines are escaped so the body stays one line");
+
+            Check(EnchorSearchRequest.Build("", 1, "guitar", "hard").Contains("\"difficulty\":\"hard\""),
+                  "every valid difficulty passes through unchanged");
         }
 
         static void Check(bool condition, string description)

@@ -50,7 +50,7 @@ SOURCES=$(find Assets/Scripts -name '*.cs' \
   ! -path '*/Core/SongLibrary.cs' \
   ! -path '*/Core/SongEntry.cs' \
   ! -path '*/Core/AppState.cs' \
-  ! -path '*/Enchor/*')
+  ! -path '*/Enchor/EnchorClient.cs')
 
 "$MCS" -target:exe -out:"$OUT/tests.exe" \
   -langversion:7.2 \
