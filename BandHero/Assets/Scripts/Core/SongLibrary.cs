@@ -45,6 +45,29 @@ namespace BandHero.Core
         AudioLinkStore Links =>
             _links ?? (_links = new AudioLinkStore(Path.Combine(Application.persistentDataPath, "audio_links.txt")));
 
+        SongDifficultyStore Difficulties =>
+            _difficulties ?? (_difficulties = new SongDifficultyStore(
+                Path.Combine(Application.persistentDataPath, "song_difficulties.txt")));
+
+        SongDifficultyStore _difficulties;
+
+        /// <summary>
+        /// Difficulty this song was last played at, resolved against the sections it really
+        /// carries. Falls back to <paramref name="fallback"/> for a song never opened.
+        /// </summary>
+        public string DifficultyFor(SongEntry entry, string fallback)
+        {
+            if (entry == null) return fallback;
+            return Difficulties.Resolve(entry.ChartPath, fallback, entry.Difficulties);
+        }
+
+        /// <summary>Records the difficulty chosen for one song, leaving other songs alone.</summary>
+        public void RememberDifficulty(SongEntry entry, string difficulty)
+        {
+            if (entry == null) return;
+            Difficulties.Set(entry.ChartPath, difficulty);
+        }
+
         /// <summary>
         /// Attaches a local audio file to a chart and remembers it across launches.
         ///
@@ -117,6 +140,8 @@ namespace BandHero.Core
 
                     entry.AlbumArt = sng.ReadFile("album.jpg") ?? sng.ReadFile("album.png");
 
+                    entry.Difficulties = ReadDifficulties(sng);
+
                     // Only honour a remembered attachment if the file is still on the device;
                     // a stale path would make the song unplayable instead of just reverted.
                     string linked = Links.Get(path);
@@ -134,6 +159,33 @@ namespace BandHero.Core
 
         static string Metadata(SngReader sng, string key, string fallback) =>
             sng.Metadata.TryGetValue(key, out string value) && !string.IsNullOrEmpty(value) ? value : fallback;
+
+        /// <summary>
+        /// Reads the difficulties a chart actually contains, preferring notes.chart and falling
+        /// back to the MIDI track. An unreadable package reports no difficulties, which the menu
+        /// treats as "offer everything" rather than hiding the song.
+        /// </summary>
+        static List<string> ReadDifficulties(SngReader sng)
+        {
+            try
+            {
+                string chartText = sng.ReadText("notes.chart");
+                if (chartText != null)
+                {
+                    List<string> fromChart = ChartDifficultyScanner.FromChartText(chartText);
+                    if (fromChart.Count > 0) return fromChart;
+                }
+
+                byte[] midi = sng.ReadFirstWithExtension(".mid");
+                if (midi != null) return ChartDifficultyScanner.FromMidi(midi);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("Could not read difficulties: " + ex.Message);
+            }
+
+            return new List<string>();
+        }
 
         /// <summary>Saves a downloaded chart into the library and returns its entry.</summary>
         public SongEntry SaveChart(byte[] sngData, string md5)
@@ -153,6 +205,10 @@ namespace BandHero.Core
         public LoadedSong Load(SongEntry entry, string difficulty, out string error)
         {
             error = null;
+
+            // A chart may only carry some difficulties, so fall back to the hardest one it does
+            // have instead of failing when the saved preference is missing from this chart.
+            difficulty = ChartDifficulty.Resolve(difficulty, entry.Difficulties);
 
             // The UI speaks enchor's naming ("Normal"); chart sections are authored with the
             // Guitar Hero naming ("Medium"). Parsers only understand the latter.

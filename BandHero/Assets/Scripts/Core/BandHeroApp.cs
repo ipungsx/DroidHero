@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -50,11 +51,24 @@ namespace BandHero.Core
         Vector2 _songScroll;
         Vector2 _searchScroll;
         Vector2 _boardScroll;
+        Vector2 _themeScroll;
         int _searchPage = 1;
+
+        /// <summary>Difficulty the running (or last) song was actually loaded at.</summary>
+        string _activeDifficulty = "";
 
         float _fade;
 
         string SaveRoot => Application.persistentDataPath;
+
+        /// <summary>
+        /// Height of the status toast, which every screen reserves before laying out its own
+        /// footer. Without this a toast would sit on top of the bottom buttons and swallow taps.
+        /// </summary>
+        float StatusInset => string.IsNullOrEmpty(_status) ? 0f : Scale(84) + Scale(16);
+
+        /// <summary>Bottom edge a screen may draw to without colliding with the status toast.</summary>
+        float ContentBottom => UnityEngine.Screen.height - Scale(24) - StatusInset;
 
         void Awake()
         {
@@ -91,7 +105,7 @@ namespace BandHero.Core
             camera.backgroundColor = LaneTheme.BackgroundColor;
             camera.clearFlags = CameraClearFlags.SolidColor;
 
-            if (Object.FindFirstObjectByType<AudioListener>() == null) camera.gameObject.AddComponent<AudioListener>();
+            if (UnityEngine.Object.FindFirstObjectByType<AudioListener>() == null) camera.gameObject.AddComponent<AudioListener>();
 
             _fittedAspect = camera.aspect;
         }
@@ -183,8 +197,10 @@ namespace BandHero.Core
             float h = UnityEngine.Screen.height;
             float boxHeight = Scale(84);
 
-            var box = new Rect(Scale(24), h - boxHeight - Scale(24), w - Scale(48), boxHeight);
-            UiSkin.Card(box, new Color(0.06f, 0.06f, 0.10f, 0.92f));
+            // Anchored to the very bottom, and every screen keeps its footer above ContentBottom,
+            // so the toast never covers a button.
+            var box = new Rect(Scale(24), h - boxHeight - Scale(20), w - Scale(48), boxHeight);
+            UiSkin.Card(box, new Color(0.06f, 0.06f, 0.10f, 0.96f));
 
             GUI.Label(new Rect(box.x + Scale(18), box.y + Scale(10), box.width - Scale(80), box.height - Scale(20)),
                       _status, UiSkin.Small);
@@ -219,6 +235,11 @@ namespace BandHero.Core
             switch (_screen)
             {
                 case Screen.SongSelect:
+                    // A selected song opens a detail panel; back closes the panel before
+                    // leaving the screen, so the two steps behave like a stack.
+                    if (AppState.SelectedSong != null) AppState.SelectedSong = null;
+                    else GoToMenu();
+                    break;
                 case Screen.EnchorSearch:
                 case Screen.Leaderboard:
                 case Screen.Themes:
@@ -242,14 +263,15 @@ namespace BandHero.Core
             float h = UnityEngine.Screen.height;
 
             // Title block, drawn large and spaced so it reads as a logo rather than a label.
-            GUI.Label(new Rect(0, h * 0.10f, w, Scale(96)), "BAND HERO", UiSkin.Title);
-            GUI.Label(new Rect(0, h * 0.10f + Scale(84), w, Scale(40)),
+            GUI.Label(new Rect(0, h * 0.08f, w, Scale(96)), "BAND HERO", UiSkin.Title);
+            GUI.Label(new Rect(0, h * 0.08f + Scale(88), w, Scale(40)),
                       "TWO-DIMENSIONAL RHYTHM ACTION", UiSkin.Center);
 
             float buttonWidth = Mathf.Min(Scale(460), w * 0.78f);
             float x = (w - buttonWidth) * 0.5f;
-            float y = h * 0.34f;
+            float y = h * 0.30f;
             float step = Scale(92);
+            float halfWidth = (buttonWidth - Scale(16)) * 0.5f;
 
             if (GUI.Button(new Rect(x, y, buttonWidth, Scale(76)), "PLAY", UiSkin.ButtonAccent))
             {
@@ -261,11 +283,10 @@ namespace BandHero.Core
                 }
                 else
                 {
+                    AppState.SelectedSong = null;
                     GoTo(Screen.SongSelect);
                 }
             }
-
-            float halfWidth = (buttonWidth - Scale(16)) * 0.5f;
 
             if (GUI.Button(new Rect(x, y + step, halfWidth, Scale(70)), "CHARTS", UiSkin.Button))
             {
@@ -289,43 +310,66 @@ namespace BandHero.Core
                 GoTo(Screen.Calibration);
             }
 
-            DrawDifficultyRow(new Rect(x, y + step * 3f, buttonWidth, Scale(56)), buttonWidth);
+            // Difficulty lives on the song screen, so the menu only points the way there.
+            GUI.Label(new Rect(x, y + step * 3f, buttonWidth, Scale(28)), "DIFFICULTY", UiSkin.Tiny);
+            GUI.Label(new Rect(x, y + step * 3f + Scale(28), buttonWidth, Scale(40)),
+                      "chosen per song", UiSkin.Center);
 
-            // Footer: what is installed and which theme is live.
-            string footer = AppState.Songs.Count + " song(s)  ·  " + _settings.Difficulty + "  ·  " +
-                            LaneTheme.Current.Name + "  ·  lights " + (_settings.LightShow ? "on" : "off");
-            GUI.Label(new Rect(Scale(24), h - Scale(96), w - Scale(48), Scale(40)), footer, UiSkin.Small);
+            string footer = AppState.Songs.Count + " song(s)  ·  " + LaneTheme.Current.Name +
+                            "  ·  lights " + (_settings.LightShow ? "on" : "off");
+            GUI.Label(new Rect(Scale(24), ContentBottom - Scale(46), w - Scale(48), Scale(40)), footer, UiSkin.Small);
 
-            if (GUI.Button(new Rect(w - Scale(120), Scale(20), Scale(96), Scale(52)), "QUIT", UiSkin.ButtonGhost))
+            // QUIT sits in the header row, below the title block, so it never overlaps it.
+            if (GUI.Button(new Rect(w - Scale(116), Scale(20), Scale(96), Scale(52)), "QUIT", UiSkin.ButtonGhost))
             {
                 Application.Quit();
             }
         }
 
         /// <summary>
-        /// Difficulty is chosen before the song, because charts only contain the difficulties
-        /// their author charted and the same song can be very different between them.
+        /// Difficulty chips for one song, limited to the sections that song actually charts.
+        ///
+        /// enchor.us does not list a chart's difficulties, so they are read out of the package
+        /// when it is saved. A song with only Expert therefore offers Expert alone, instead of
+        /// letting a player pick a difficulty that would load zero notes.
         /// </summary>
-        void DrawDifficultyRow(Rect rect, float totalWidth)
+        void DrawDifficultyRow(Rect rect, float totalWidth, SongEntry song)
         {
-            GUI.Label(new Rect(rect.x, rect.y - Scale(30), totalWidth, Scale(28)), "DIFFICULTY", UiSkin.Tiny);
+            List<string> available = AvailableDifficulties(song);
+
+            GUI.Label(new Rect(rect.x, rect.y - Scale(32), totalWidth, Scale(28)),
+                      available.Count > 1 ? "DIFFICULTY" : "DIFFICULTY  ·  only one charted", UiSkin.Tiny);
 
             float gap = Scale(10);
-            float chipWidth = (totalWidth - gap * (ChartDifficulty.All.Length - 1)) / ChartDifficulty.All.Length;
+            float chipWidth = (totalWidth - gap * (available.Count - 1)) / available.Count;
 
-            for (int i = 0; i < ChartDifficulty.All.Length; i++)
+            for (int i = 0; i < available.Count; i++)
             {
+                string difficulty = available[i];
                 var chip = new Rect(rect.x + i * (chipWidth + gap), rect.y, chipWidth, rect.height);
 
-                bool selected = i == _settings.DifficultyIndex;
-                Color accent = DifficultyColor(i);
+                bool selected = string.Equals(difficulty, DifficultyFor(song), StringComparison.OrdinalIgnoreCase);
+                Color accent = DifficultyColor(ChartDifficulty.IndexOf(difficulty));
 
-                if (UiSkin.Chip(chip, ChartDifficulty.All[i].ToUpperInvariant(), selected, accent))
+                if (UiSkin.Chip(chip, difficulty.ToUpperInvariant(), selected, accent))
                 {
-                    _settings.DifficultyIndex = i;
-                    _settings.Save(SaveRoot);
+                    _library.RememberDifficulty(song, difficulty);
                 }
             }
+        }
+
+        /// <summary>
+        /// Difficulties offered for a song: those it charts, or every difficulty when the
+        /// package could not be introspected so an unknown chart is never locked out.
+        /// </summary>
+        static List<string> AvailableDifficulties(SongEntry song)
+        {
+            if (song != null && song.Difficulties != null && song.Difficulties.Count > 0)
+            {
+                return song.Difficulties;
+            }
+
+            return new List<string>(ChartDifficulty.All);
         }
 
         static Color DifficultyColor(int index)
@@ -344,19 +388,41 @@ namespace BandHero.Core
         void DrawSongSelect()
         {
             float w = UnityEngine.Screen.width;
-            float h = UnityEngine.Screen.height;
 
             DrawHeader("SELECT A SONG", AppState.Songs.Count + " chart(s)");
 
-            float listTop = Scale(122);
-            var view = new Rect(Scale(20), listTop, w - Scale(40), h - listTop - Scale(96));
-
             if (AppState.Songs.Count == 0)
             {
-                GUI.Label(view, "Your library is empty.\nDownload charts from enchor.us, or pick local audio.",
+                GUI.Label(new Rect(Scale(24), Scale(130), w - Scale(48), Scale(140)),
+                          "Your library is empty.\nDownload charts from enchor.us, or pick local audio.",
                           UiSkin.Body);
+
+                if (GUI.Button(new Rect(Scale(24), ContentBottom - Scale(72), Scale(240), Scale(64)),
+                               "BROWSE ENCHOR", UiSkin.ButtonAccent))
+                {
+                    GoTo(Screen.EnchorSearch);
+                }
+
                 return;
             }
+
+            if (AppState.SelectedSong != null && AppState.Songs.Contains(AppState.SelectedSong))
+            {
+                DrawSongDetail(w);
+                return;
+            }
+
+            DrawSongList(w);
+        }
+
+        /// <summary>Step one: the list. Tapping a row opens that song's detail panel.</summary>
+        void DrawSongList(float w)
+        {
+            float listTop = Scale(122);
+            float footerHeight = Scale(84);
+
+            var view = new Rect(Scale(20), listTop, w - Scale(40),
+                                Mathf.Max(Scale(120), ContentBottom - listTop - footerHeight));
 
             float rowHeight = Scale(136);
             var content = new Rect(0, 0, view.width - Scale(20), AppState.Songs.Count * rowHeight);
@@ -375,45 +441,124 @@ namespace BandHero.Core
                 DrawAlbumArt(song, art);
 
                 float textX = art.xMax + Scale(16);
-                float textWidth = row.width - (textX - row.x) - Scale(300);
+                float textWidth = Mathf.Max(Scale(120), row.width - (textX - row.x) - Scale(140));
 
-                GUI.Label(new Rect(textX, row.y + Scale(16), textWidth, Scale(36)),
+                GUI.Label(new Rect(textX, row.y + Scale(18), textWidth, Scale(36)),
                           song.DisplayName, UiSkin.CenterBold);
-                GUI.Label(new Rect(textX, row.y + Scale(54), textWidth, Scale(30)),
+                GUI.Label(new Rect(textX, row.y + Scale(56), textWidth, Scale(30)),
                           song.Subtitle, UiSkin.Small);
-                GUI.Label(new Rect(textX, row.y + Scale(84), textWidth, Scale(28)),
-                          LengthText(song) + "  ·  best " + _leaderboard.BestScore(song.DisplayName, _settings.Difficulty).ToString("N0"),
+                GUI.Label(new Rect(textX, row.y + Scale(88), textWidth, Scale(28)),
+                          LengthText(song) + "  ·  " + DifficultySummary(song),
                           UiSkin.Tiny);
 
-                float playX = row.x + row.width - Scale(196);
-                if (GUI.Button(new Rect(playX, row.y + Scale(40), Scale(88), Scale(56)), "PLAY", UiSkin.ButtonAccent))
+                if (GUI.Button(new Rect(row.x + row.width - Scale(124), row.y + Scale(38),
+                                        Scale(104), Scale(58)),
+                               "SELECT", UiSkin.ButtonAccent))
                 {
                     AppState.SelectedSong = song;
-                    StartSong(song, _settings.Difficulty);
-                }
-
-                if (GUI.Button(new Rect(playX + Scale(96), row.y + Scale(40), Scale(88), Scale(56)),
-                               song.HasLocalAudio ? "CHANGE" : "AUDIO", UiSkin.Button))
-                {
-                    AppState.SelectedSong = song;
-                    StartCoroutine(AttachLocalAudio(song));
-                }
-
-                if (song.HasLocalAudio &&
-                    GUI.Button(new Rect(row.x + row.width - Scale(48), row.y + Scale(14), Scale(36), Scale(36)),
-                               "x", UiSkin.ButtonGhost))
-                {
-                    _library.DetachLocalAudio(song);
-                    _status = song.DisplayName + " uses the chart audio again.";
+                    _status = "";
                 }
             }
 
             GUI.EndScrollView();
 
-            if (GUI.Button(new Rect(Scale(20), h - Scale(84), Scale(200), Scale(60)), "LOCAL AUDIO", UiSkin.Button))
+            // Footer row: the two ways to add music, side by side and clear of the list.
+            float footerY = ContentBottom - Scale(64);
+            float halfWidth = (w - Scale(64)) * 0.5f;
+
+            if (GUI.Button(new Rect(Scale(20), footerY, halfWidth, Scale(60)), "LOCAL AUDIO", UiSkin.Button))
             {
                 StartCoroutine(PickLocalAudio());
             }
+
+            if (GUI.Button(new Rect(Scale(44) + halfWidth, footerY, halfWidth, Scale(60)),
+                           "GET CHARTS", UiSkin.Button))
+            {
+                GoTo(Screen.EnchorSearch);
+            }
+        }
+
+        /// <summary>
+        /// Step two: one song with its own difficulty chips. Difficulty is only offered once a
+        /// song is chosen, because the chips depend on the sections that song contains.
+        /// </summary>
+        void DrawSongDetail(float w)
+        {
+            SongEntry song = AppState.SelectedSong;
+
+            float panelWidth = Mathf.Min(Scale(680), w - Scale(40));
+            float panelX = (w - panelWidth) * 0.5f;
+
+            var art = new Rect(panelX, Scale(122), Scale(150), Scale(150));
+            DrawAlbumArt(song, art);
+
+            float textX = art.xMax + Scale(20);
+            float textWidth = panelX + panelWidth - textX;
+
+            GUI.Label(new Rect(textX, art.y + Scale(6), textWidth, Scale(44)),
+                      song.DisplayName, UiSkin.CenterBold);
+            GUI.Label(new Rect(textX, art.y + Scale(54), textWidth, Scale(32)), song.Artist, UiSkin.Small);
+            GUI.Label(new Rect(textX, art.y + Scale(90), textWidth, Scale(30)),
+                      LengthText(song) + (song.HasLocalAudio ? "  ·  local audio" : "  ·  chart audio"),
+                      UiSkin.Tiny);
+            GUI.Label(new Rect(textX, art.y + Scale(120), textWidth, Scale(30)),
+                      song.Charter.Length > 0 ? "charted by " + song.Charter : "charter unknown", UiSkin.Tiny);
+
+            float chipTop = art.yMax + Scale(46);
+            var chipRect = new Rect(panelX, chipTop, panelWidth, Scale(62));
+            DrawDifficultyRow(chipRect, panelWidth, song);
+
+            // Best score for the difficulty currently selected, so the chip choice has context.
+            float bestY = chipTop + Scale(84);
+            GUI.Label(new Rect(panelX, bestY, panelWidth, Scale(34)),
+                      "Best on " + DifficultyFor(song) + ": " +
+                      _leaderboard.BestScore(song.DisplayName, DifficultyFor(song)).ToString("N0"),
+                      UiSkin.Center);
+
+            float buttonWidth = Mathf.Min(Scale(560), w - Scale(40));
+            float buttonX = (w - buttonWidth) * 0.5f;
+            float halfWidth = (buttonWidth - Scale(16)) * 0.5f;
+            float startY = bestY + Scale(52);
+
+            if (GUI.Button(new Rect(buttonX, startY, buttonWidth, Scale(78)), "START", UiSkin.ButtonAccent))
+            {
+                StartSong(song, DifficultyFor(song));
+                return;
+            }
+
+            if (GUI.Button(new Rect(buttonX, startY + Scale(94), halfWidth, Scale(64)),
+                           song.HasLocalAudio ? "CHANGE AUDIO" : "USE MY AUDIO", UiSkin.Button))
+            {
+                StartCoroutine(AttachLocalAudio(song));
+            }
+
+            if (GUI.Button(new Rect(buttonX + halfWidth + Scale(16), startY + Scale(94), halfWidth, Scale(64)),
+                           "BACK TO LIST", UiSkin.Button))
+            {
+                AppState.SelectedSong = null;
+            }
+
+            if (song.HasLocalAudio &&
+                GUI.Button(new Rect(buttonX, startY + Scale(174), buttonWidth, Scale(56)),
+                           "USE CHART AUDIO INSTEAD", UiSkin.ButtonGhost))
+            {
+                _library.DetachLocalAudio(song);
+                _status = song.DisplayName + " uses the chart audio again.";
+            }
+        }
+
+        /// <summary>
+        /// The difficulty a song is set to: what the player last chose for it, resolved against
+        /// the sections the chart really carries. The app-wide setting is only a first-run
+        /// default, which is why two songs can sit on different difficulties at once.
+        /// </summary>
+        string DifficultyFor(SongEntry song) => _library.DifficultyFor(song, _settings.Difficulty);
+
+        /// <summary>Compact list of the difficulties a chart carries, for the song row.</summary>
+        static string DifficultySummary(SongEntry song)
+        {
+            List<string> available = AvailableDifficulties(song);
+            return string.Join("/", available.ToArray());
         }
 
         void DrawAlbumArt(SongEntry song, Rect rect)
@@ -450,27 +595,65 @@ namespace BandHero.Core
         void DrawEnchorSearch()
         {
             float w = UnityEngine.Screen.width;
-            float h = UnityEngine.Screen.height;
 
             DrawHeader("ENCHOR.US CHARTS", "search and download");
 
             float searchY = Scale(122);
-            _searchQuery = GUI.TextField(new Rect(Scale(20), searchY, w - Scale(320), Scale(60)),
+            float fieldHeight = Scale(60);
+
+            // Two button columns are reserved on the right, so the field can never run under them.
+            float buttonWidth = Scale(116);
+            float gap = Scale(10);
+            float buttonsWidth = buttonWidth * 2f + gap;
+            float fieldWidth = Mathf.Max(Scale(120), w - Scale(40) - buttonsWidth - Scale(12));
+
+            _searchQuery = GUI.TextField(new Rect(Scale(20), searchY, fieldWidth, fieldHeight),
                                          _searchQuery ?? "", 64, UiSkin.TextField);
 
-            if (GUI.Button(new Rect(w - Scale(290), searchY, Scale(130), Scale(60)), "SEARCH", UiSkin.ButtonAccent))
+            float buttonsX = Scale(20) + fieldWidth + Scale(12);
+
+            if (GUI.Button(new Rect(buttonsX, searchY, buttonWidth, fieldHeight), "SEARCH", UiSkin.ButtonAccent))
             {
                 _searchPage = 1;
                 StartCoroutine(RunSearch());
             }
 
-            if (GUI.Button(new Rect(w - Scale(150), searchY, Scale(130), Scale(60)), "NEXT", UiSkin.Button))
+            bool hasResults = _searchResult != null && _searchResult.data != null && _searchResult.data.Length > 0;
+            bool canPage = hasResults && !_searching;
+
+            // "found" is the total the API matched, so the last page is the one that reaches it.
+            // Without this NEXT would happily walk past the end into an empty page.
+            bool hasNextPage = canPage && _searchPage * EnchorClient.PageSize < _searchResult.found;
+
+            if (GUI.Button(new Rect(buttonsX + buttonWidth + gap, searchY, buttonWidth, fieldHeight),
+                           "NEXT", hasNextPage ? UiSkin.Button : UiSkin.ButtonGhost))
             {
-                _searchPage++;
-                StartCoroutine(RunSearch());
+                if (hasNextPage)
+                {
+                    _searchPage++;
+                    StartCoroutine(RunSearch());
+                }
             }
 
-            var listView = new Rect(Scale(20), searchY + Scale(80), w - Scale(40), h - searchY - Scale(200));
+            float pagerY = searchY + fieldHeight + Scale(12);
+            bool canPrev = canPage && _searchPage > 1;
+
+            if (GUI.Button(new Rect(Scale(20), pagerY, Scale(116), Scale(52)),
+                           "PREV", canPrev ? UiSkin.Button : UiSkin.ButtonGhost))
+            {
+                if (canPrev)
+                {
+                    _searchPage--;
+                    StartCoroutine(RunSearch());
+                }
+            }
+
+            GUI.Label(new Rect(Scale(148), pagerY, w - Scale(168), Scale(52)),
+                      "Page " + _searchPage + (hasResults ? "  ·  " + _searchResult.found + " charts found" : ""),
+                      UiSkin.Tiny);
+
+            var listView = new Rect(Scale(20), pagerY + Scale(64), w - Scale(40),
+                                    Mathf.Max(Scale(120), ContentBottom - pagerY - Scale(64)));
 
             if (_searching)
             {
@@ -478,7 +661,7 @@ namespace BandHero.Core
                 return;
             }
 
-            if (_searchResult == null || _searchResult.data == null || _searchResult.data.Length == 0)
+            if (!hasResults)
             {
                 GUI.Label(listView, "Search for a song or artist.\nCharts download as .sng and are stored locally.",
                           UiSkin.Body);
@@ -495,16 +678,18 @@ namespace BandHero.Core
                 var row = new Rect(0, i * rowHeight, content.width, rowHeight - Scale(12));
                 UiSkin.Card(row, new Color(0.10f, 0.10f, 0.15f, 0.94f));
 
-                GUI.Label(new Rect(row.x + Scale(16), row.y + Scale(14), row.width - Scale(220), Scale(34)),
+                float textWidth = Mathf.Max(Scale(120), row.width - Scale(170) - Scale(16));
+
+                GUI.Label(new Rect(row.x + Scale(16), row.y + Scale(14), textWidth, Scale(34)),
                           chart.name ?? "Untitled", UiSkin.CenterBold);
-                GUI.Label(new Rect(row.x + Scale(16), row.y + Scale(50), row.width - Scale(220), Scale(28)),
+                GUI.Label(new Rect(row.x + Scale(16), row.y + Scale(50), textWidth, Scale(28)),
                           (chart.artist ?? "Unknown") + "  ·  " + (chart.charter ?? ""), UiSkin.Small);
-                GUI.Label(new Rect(row.x + Scale(16), row.y + Scale(80), row.width - Scale(220), Scale(28)),
+                GUI.Label(new Rect(row.x + Scale(16), row.y + Scale(80), textWidth, Scale(28)),
                           "Guitar " + DifficultyLabel(chart.diff_guitar) + "  ·  " +
                           "Drums " + DifficultyLabel(chart.diff_drums) + "  ·  " + chart.DisplayLength,
                           UiSkin.Tiny);
 
-                if (GUI.Button(new Rect(row.x + row.width - Scale(170), row.y + Scale(42), Scale(150), Scale(60)),
+                if (GUI.Button(new Rect(row.x + row.width - Scale(160), row.y + Scale(42), Scale(144), Scale(60)),
                                "DOWNLOAD", UiSkin.ButtonAccent))
                 {
                     StartCoroutine(DownloadChart(chart));
@@ -531,8 +716,20 @@ namespace BandHero.Core
             GUI.Label(new Rect(0, Scale(142), w, Scale(44)), AppState.LastSongName, UiSkin.Center);
             GUI.Label(new Rect(0, Scale(184), w, Scale(36)), AppState.LastSongArtist, UiSkin.Small);
 
+            float buttonWidth = Mathf.Min(Scale(440), w * 0.8f);
+            float buttonX = (w - buttonWidth) * 0.5f;
+            float menuY = ContentBottom - Scale(70);
+            float playAgainY = menuY - Scale(86);
+
             float cardWidth = Mathf.Min(Scale(560), w * 0.9f);
-            var card = new Rect((w - cardWidth) * 0.5f, h * 0.27f, cardWidth, Scale(300));
+            float cardHeight = Scale(300);
+
+            // The card is centred by preference but slides up on short screens, so it and the
+            // rank line always stay clear of the buttons underneath.
+            float cardTop = Mathf.Min(h * 0.27f, playAgainY - cardHeight - Scale(60));
+            cardTop = Mathf.Max(Scale(228), cardTop);
+
+            var card = new Rect((w - cardWidth) * 0.5f, cardTop, cardWidth, cardHeight);
             UiSkin.Card(card, new Color(0.09f, 0.09f, 0.14f, 0.95f));
 
             GUI.Label(new Rect(card.x, card.y + Scale(16), card.width, Scale(30)), "SCORE", UiSkin.Center);
@@ -558,24 +755,22 @@ namespace BandHero.Core
             GUI.Label(new Rect(card.x + Scale(28), rowY + rowHeight * 2f, halfWidth, rowHeight),
                       "Difficulty", UiSkin.Small);
             GUI.Label(new Rect(card.x + halfWidth, rowY + rowHeight * 2f, halfWidth - Scale(28), rowHeight),
-                      _settings.Difficulty, UiSkin.CenterBold);
+                      _activeDifficulty.Length > 0 ? _activeDifficulty : _settings.Difficulty, UiSkin.CenterBold);
 
             if (AppState.LastRank > 0)
             {
                 GUI.Label(new Rect(0, card.yMax + Scale(8), w, Scale(40)),
-                          "Leaderboard rank #" + AppState.LastRank + " on " + _settings.Difficulty,
+                          "Leaderboard rank #" + AppState.LastRank + " on " + _activeDifficulty,
                           UiSkin.CenterBold);
             }
 
-            float buttonWidth = Mathf.Min(Scale(440), w * 0.8f);
-            float buttonX = (w - buttonWidth) * 0.5f;
-
-            if (GUI.Button(new Rect(buttonX, h - Scale(200), buttonWidth, Scale(70)), "PLAY AGAIN", UiSkin.ButtonAccent))
+            if (GUI.Button(new Rect(buttonX, playAgainY, buttonWidth, Scale(70)),
+                           "PLAY AGAIN", UiSkin.ButtonAccent))
             {
-                if (AppState.SelectedSong != null) StartSong(AppState.SelectedSong, _settings.Difficulty);
+                if (AppState.SelectedSong != null) StartSong(AppState.SelectedSong, DifficultyFor(AppState.SelectedSong));
             }
 
-            if (GUI.Button(new Rect(buttonX, h - Scale(118), buttonWidth, Scale(70)), "MAIN MENU", UiSkin.Button))
+            if (GUI.Button(new Rect(buttonX, menuY, buttonWidth, Scale(70)), "MAIN MENU", UiSkin.Button))
             {
                 GoToMenu();
             }
@@ -586,29 +781,33 @@ namespace BandHero.Core
         void DrawLeaderboard()
         {
             float w = UnityEngine.Screen.width;
-            float h = UnityEngine.Screen.height;
 
             DrawHeader("LEADERBOARD", "best runs on this device");
 
-            var view = new Rect(Scale(20), Scale(122), w - Scale(40), h - Scale(220));
+            float footerHeight = Scale(84);
+            var view = new Rect(Scale(20), Scale(150), w - Scale(40),
+                                Mathf.Max(Scale(120), ContentBottom - Scale(150) - footerHeight));
 
             if (AppState.SelectedSong != null)
             {
-                List<ScoreRecord> top = _leaderboard.Top(AppState.SelectedSong.DisplayName, _settings.Difficulty);
-                GUI.Label(new Rect(view.x, view.y - Scale(30), view.width, Scale(30)),
-                          AppState.SelectedSong.DisplayName + "  ·  " + _settings.Difficulty, UiSkin.Tiny);
+                GUI.Label(new Rect(Scale(20), Scale(122), w - Scale(40), Scale(28)),
+                          AppState.SelectedSong.DisplayName + "  ·  " +
+                          DifficultyFor(AppState.SelectedSong), UiSkin.Tiny);
+
+                string songDifficulty = DifficultyFor(AppState.SelectedSong);
+                List<ScoreRecord> top = _leaderboard.Top(AppState.SelectedSong.DisplayName, songDifficulty);
 
                 if (top.Count == 0)
                 {
                     GUI.Label(new Rect(view.x, view.y + Scale(20), view.width, Scale(80)),
-                              "No runs yet for this song at " + _settings.Difficulty + ".\nPlay it to set a score.",
+                              "No runs yet for this song at " + songDifficulty + ".\nPlay it to set a score.",
                               UiSkin.Body);
-                    DrawLeaderboardFooter(w, h);
+                    DrawLeaderboardFooter(w, true);
                     return;
                 }
 
                 DrawScoreTable(view, top);
-                DrawLeaderboardFooter(w, h);
+                DrawLeaderboardFooter(w, true);
                 return;
             }
 
@@ -617,7 +816,7 @@ namespace BandHero.Core
             {
                 GUI.Label(new Rect(view.x, view.y + Scale(20), view.width, Scale(80)),
                           "No scores yet.\nFinish a song and your best run lands here.", UiSkin.Body);
-                DrawLeaderboardFooter(w, h);
+                DrawLeaderboardFooter(w, false);
                 return;
             }
 
@@ -643,7 +842,7 @@ namespace BandHero.Core
             }
 
             GUI.EndScrollView();
-            DrawLeaderboardFooter(w, h);
+            DrawLeaderboardFooter(w, false);
         }
 
         void DrawScoreTable(Rect view, List<ScoreRecord> records)
@@ -671,19 +870,33 @@ namespace BandHero.Core
             }
         }
 
-        void DrawLeaderboardFooter(float w, float h)
+        void DrawLeaderboardFooter(float w, bool songFocused)
         {
-            float buttonWidth = (w - Scale(60)) * 0.5f;
+            float y = ContentBottom - Scale(60);
 
-            if (GUI.Button(new Rect(Scale(20), h - Scale(84), buttonWidth, Scale(60)), "ALL SONGS", UiSkin.Button))
+            if (songFocused)
             {
-                AppState.SelectedSong = null;
+                float halfWidth = (w - Scale(60)) * 0.5f;
+
+                if (GUI.Button(new Rect(Scale(20), y, halfWidth, Scale(60)), "ALL SONGS", UiSkin.Button))
+                {
+                    AppState.SelectedSong = null;
+                }
+
+                if (GUI.Button(new Rect(Scale(40) + halfWidth, y, halfWidth, Scale(60)), "CLEAR THIS", UiSkin.ButtonGhost))
+                {
+                    string cleared = DifficultyFor(AppState.SelectedSong);
+                    _leaderboard.Clear(AppState.SelectedSong.DisplayName, cleared);
+                    _status = "Cleared " + cleared + " scores for " + AppState.SelectedSong.DisplayName + ".";
+                }
+
+                return;
             }
 
-            if (GUI.Button(new Rect(Scale(40) + buttonWidth, h - Scale(84), buttonWidth, Scale(60)),
-                           "CLEAR", UiSkin.ButtonGhost))
+            if (GUI.Button(new Rect(Scale(20), y, w - Scale(40), Scale(60)), "CLEAR ALL", UiSkin.ButtonGhost))
             {
-                _status = "Leaderboard kept on this device; nothing is uploaded.";
+                _leaderboard.Clear();
+                _status = "Leaderboard cleared.";
             }
         }
 
@@ -692,17 +905,25 @@ namespace BandHero.Core
         void DrawThemes()
         {
             float w = UnityEngine.Screen.width;
-            float h = UnityEngine.Screen.height;
 
             DrawHeader("THEMES", "gameplay look and light show");
 
+            // The light-show toggle owns a fixed strip at the bottom, so the theme list is
+            // scrolled inside whatever height is left instead of running under it.
+            float toggleHeight = Scale(96);
+            float toggleY = ContentBottom - toggleHeight;
             float rowHeight = Scale(112);
-            float top = Scale(122);
+
+            var listView = new Rect(Scale(20), Scale(122), w - Scale(40),
+                                    Mathf.Max(Scale(120), toggleY - Scale(122) - Scale(12)));
+            var content = new Rect(0, 0, listView.width - Scale(20), GameplayTheme.Count * rowHeight);
+
+            _themeScroll = GUI.BeginScrollView(listView, _themeScroll, content);
 
             for (int i = 0; i < GameplayTheme.Count; i++)
             {
                 GameplayTheme theme = GameplayTheme.At(i);
-                var row = new Rect(Scale(20), top + i * rowHeight, w - Scale(40), rowHeight - Scale(12));
+                var row = new Rect(0, i * rowHeight, content.width, rowHeight - Scale(12));
                 bool selected = i == _settings.ThemeIndex;
 
                 UiSkin.Card(row, selected
@@ -718,12 +939,16 @@ namespace BandHero.Core
                     UiSkin.Fill(chip, theme.Lane(lane));
                 }
 
-                GUI.Label(new Rect(row.x + Scale(190), row.y + Scale(14), row.width - Scale(260), Scale(34)),
+                float textX = row.x + Scale(190);
+                float textWidth = Mathf.Max(Scale(120), row.width - Scale(190) - Scale(120));
+
+                GUI.Label(new Rect(textX, row.y + Scale(14), textWidth, Scale(34)),
                           theme.Name, UiSkin.CenterBold);
-                GUI.Label(new Rect(row.x + Scale(190), row.y + Scale(50), row.width - Scale(260), Scale(30)),
+                GUI.Label(new Rect(textX, row.y + Scale(50), textWidth, Scale(30)),
                           theme.Blurb, UiSkin.Tiny);
 
-                if (GUI.Button(new Rect(row.x + row.width - Scale(56), row.y + Scale(20), Scale(44), Scale(60)),
+                if (GUI.Button(new Rect(row.x + row.width - Scale(100), row.y + Scale(22),
+                                        Scale(88), Scale(56)),
                                selected ? "ON" : "SET", selected ? UiSkin.ButtonAccent : UiSkin.Button))
                 {
                     _settings.ThemeIndex = i;
@@ -734,17 +959,20 @@ namespace BandHero.Core
                 }
             }
 
-            float toggleY = top + GameplayTheme.Count * rowHeight + Scale(8);
-            var toggleRow = new Rect(Scale(20), toggleY, w - Scale(40), Scale(88));
+            GUI.EndScrollView();
+
+            var toggleRow = new Rect(Scale(20), toggleY, w - Scale(40), toggleHeight);
             UiSkin.Card(toggleRow, new Color(0.10f, 0.10f, 0.15f, 0.94f));
 
-            GUI.Label(new Rect(toggleRow.x + Scale(16), toggleRow.y + Scale(12), toggleRow.width - Scale(200), Scale(34)),
+            float toggleTextWidth = Mathf.Max(Scale(120), toggleRow.width - Scale(180));
+
+            GUI.Label(new Rect(toggleRow.x + Scale(16), toggleRow.y + Scale(14), toggleTextWidth, Scale(34)),
                       "LIGHT SHOW", UiSkin.CenterBold);
-            GUI.Label(new Rect(toggleRow.x + Scale(16), toggleRow.y + Scale(46), toggleRow.width - Scale(200), Scale(30)),
+            GUI.Label(new Rect(toggleRow.x + Scale(16), toggleRow.y + Scale(50), toggleTextWidth, Scale(30)),
                       "Stage lights blink on every drum hit", UiSkin.Tiny);
 
-            if (GUI.Button(new Rect(toggleRow.x + toggleRow.width - Scale(150), toggleRow.y + Scale(16),
-                                    Scale(130), Scale(56)),
+            if (GUI.Button(new Rect(toggleRow.x + toggleRow.width - Scale(140), toggleRow.y + Scale(20),
+                                    Scale(120), Scale(56)),
                            _settings.LightShow ? "ON" : "OFF",
                            _settings.LightShow ? UiSkin.ButtonAccent : UiSkin.Button))
             {
@@ -758,54 +986,54 @@ namespace BandHero.Core
         void DrawCalibration()
         {
             float w = UnityEngine.Screen.width;
-            float h = UnityEngine.Screen.height;
 
             DrawHeader("AUDIO CALIBRATION", AudioCalibration.Describe(_library.CalibrationMilliseconds));
 
-            GUI.Label(new Rect(Scale(24), h * 0.22f, w - Scale(48), Scale(140)),
+            // The screen is a fixed stack of rows, so on a short phone the stack is compressed
+            // rather than allowed to run past the status toast at the bottom.
+            float top = Scale(120);
+            float available = Mathf.Max(Scale(300), ContentBottom - top);
+            float vs = Mathf.Min(1f, available / Scale(560f));
+
+            GUI.Label(new Rect(Scale(24), top, w - Scale(48), Scale(140) * vs),
                       "Notes land early or late? Nudge the offset until notes sit on the strike line "
                       + "when you strum on the beat.\n\nLocal music files often carry a short silence "
                       + "at the start that chart-embedded audio does not, so this is worth setting once "
                       + "per device.", UiSkin.Body);
 
-            float buttonWidth = Scale(140);
-            float centerX = w * 0.5f;
-            float rowY = h * 0.48f;
+            // Four buttons across one row, sized from the width so they never overrun a narrow phone.
+            float margin = Scale(24);
+            float gap = Scale(10);
+            float buttonWidth = Mathf.Min(Scale(140), (w - margin * 2f - gap * 3f) / 4f);
+            float totalWidth = buttonWidth * 4f + gap * 3f;
+            float startX = (w - totalWidth) * 0.5f;
+            float rowY = top + Scale(204) * vs;
 
-            if (GUI.Button(new Rect(centerX - buttonWidth * 2f - Scale(20), rowY, buttonWidth, Scale(76)),
-                           "-20", UiSkin.Button))
+            string[] labels = { "-20", "-5", "+5", "+20" };
+            int[] steps = { -20, -AudioCalibration.StepMilliseconds, AudioCalibration.StepMilliseconds, 20 };
+
+            for (int i = 0; i < labels.Length; i++)
             {
-                _library.CalibrationMilliseconds -= 20;
+                if (GUI.Button(new Rect(startX + i * (buttonWidth + gap), rowY, buttonWidth, Scale(76)),
+                               labels[i], UiSkin.Button))
+                {
+                    _library.CalibrationMilliseconds += steps[i];
+                }
             }
 
-            if (GUI.Button(new Rect(centerX - buttonWidth - Scale(6), rowY, buttonWidth, Scale(76)),
-                           "-5", UiSkin.Button))
-            {
-                _library.CalibrationMilliseconds -= AudioCalibration.StepMilliseconds;
-            }
-
-            if (GUI.Button(new Rect(centerX + Scale(6), rowY, buttonWidth, Scale(76)),
-                           "+5", UiSkin.Button))
-            {
-                _library.CalibrationMilliseconds += AudioCalibration.StepMilliseconds;
-            }
-
-            if (GUI.Button(new Rect(centerX + buttonWidth + Scale(20), rowY, buttonWidth, Scale(76)),
-                           "+20", UiSkin.Button))
-            {
-                _library.CalibrationMilliseconds += 20;
-            }
-
-            GUI.Label(new Rect(0f, rowY + Scale(100), w, Scale(80)),
+            GUI.Label(new Rect(0f, rowY + Scale(92), w, Scale(56)),
                       AudioCalibration.Describe(_library.CalibrationMilliseconds), UiSkin.Title);
 
-            if (GUI.Button(new Rect(centerX - Scale(160), rowY + Scale(200), Scale(320), Scale(66)),
+            float resetWidth = Mathf.Min(Scale(320), w - Scale(48));
+            float resetY = rowY + Scale(166);
+
+            if (GUI.Button(new Rect((w - resetWidth) * 0.5f, resetY, resetWidth, Scale(64)),
                            "RESET", UiSkin.ButtonGhost))
             {
                 _library.CalibrationMilliseconds = 0;
             }
 
-            GUI.Label(new Rect(Scale(24), h - Scale(120), w - Scale(48), Scale(90)),
+            GUI.Label(new Rect(Scale(24), resetY + Scale(88), w - Scale(48), Scale(80)),
                       "Range " + AudioCalibration.MinMilliseconds + " to " + AudioCalibration.MaxMilliseconds
                       + " ms. The offset is applied to every chart, on top of the offset the chart declares.",
                       UiSkin.Small);
@@ -815,10 +1043,15 @@ namespace BandHero.Core
         {
             float w = UnityEngine.Screen.width;
 
-            GUI.Label(new Rect(Scale(20), Scale(24), w - Scale(160), Scale(52)), title, UiSkin.Heading);
-            GUI.Label(new Rect(Scale(20), Scale(72), w - Scale(160), Scale(28)), subtitle, UiSkin.Tiny);
+            // The BACK button owns the right-hand column, so the title and subtitle stop short
+            // of it instead of running underneath.
+            float backWidth = Scale(100);
+            float textWidth = Mathf.Max(Scale(120), w - Scale(20) - backWidth - Scale(24));
 
-            if (GUI.Button(new Rect(w - Scale(120), Scale(28), Scale(100), Scale(56)), "BACK", UiSkin.ButtonGhost))
+            GUI.Label(new Rect(Scale(20), Scale(24), textWidth, Scale(52)), title, UiSkin.Heading);
+            GUI.Label(new Rect(Scale(20), Scale(74), textWidth, Scale(28)), subtitle, UiSkin.Tiny);
+
+            if (GUI.Button(new Rect(w - Scale(120), Scale(28), backWidth, Scale(56)), "BACK", UiSkin.ButtonGhost))
             {
                 GoBack();
             }
@@ -854,14 +1087,18 @@ namespace BandHero.Core
             }
 
             SongEntry target = AppState.SelectedSong ?? AppState.Songs[0];
-            if (!_library.AttachLocalAudio(target, picked))
+
+            // The list was rescanned above, so work from the entry that is actually in it.
+            SongEntry fresh = AppState.Songs.Find(s => s.ChartPath == target.ChartPath) ?? target;
+
+            if (!_library.AttachLocalAudio(fresh, picked))
             {
                 _status = "That audio file is no longer readable.";
                 yield break;
             }
 
-            AppState.SelectedSong = target;
-            _status = "Audio attached to " + target.DisplayName;
+            AppState.SelectedSong = fresh;
+            _status = "Audio attached to " + fresh.DisplayName;
             GoTo(Screen.SongSelect);
         }
 
@@ -894,12 +1131,10 @@ namespace BandHero.Core
             _searching = true;
             _status = "";
 
-            // The API takes lowercase section names (easy/medium/hard/expert), where our
-            // difficulty is called Normal.
-            string apiDifficulty = ChartDifficulty.ToSectionName(_settings.Difficulty).ToLowerInvariant();
-
+            // No difficulty filter: the API would then only return charts rated for that one
+            // level. The song screen offers the difficulties each chart actually contains.
             yield return StartCoroutine(_enchor.Search(_searchQuery, _searchPage, EnchorClient.InstrumentGuitar,
-                                                       apiDifficulty,
+                                                       null,
                                                        result => _searchResult = result,
                                                        error => _status = error));
 
@@ -933,16 +1168,26 @@ namespace BandHero.Core
             }
 
             RefreshLibrary();
-            _status = "Saved: " + entry.DisplayName;
-            AppState.SelectedSong = entry;
+
+            // RefreshLibrary rebuilds the list from disk, so the saved entry has to be replaced
+            // by its fresh twin before the song screen can match it.
+            SongEntry saved = AppState.Songs.Find(s => s.ChartPath == entry.ChartPath) ?? entry;
+
+            // Land on a difficulty this chart actually charts, so the detail panel opens ready
+            // to play instead of showing a chip the chart cannot honour.
+            string landed = ChartDifficulty.Resolve(_settings.Difficulty, saved.Difficulties);
+            _library.RememberDifficulty(saved, landed);
+
+            _status = "Saved: " + saved.DisplayName + "  ·  " + DifficultySummary(saved);
+            AppState.SelectedSong = saved;
 
             // A file picked before the chart existed is applied here, which is the only moment
             // the two can be matched up.
             if (!string.IsNullOrEmpty(AppState.PendingLocalAudioPath))
             {
-                if (_library.AttachLocalAudio(entry, AppState.PendingLocalAudioPath))
+                if (_library.AttachLocalAudio(saved, AppState.PendingLocalAudioPath))
                 {
-                    _status = "Saved with your local audio: " + entry.DisplayName;
+                    _status = "Saved with your local audio: " + saved.DisplayName;
                 }
                 AppState.PendingLocalAudioPath = null;
             }
@@ -954,7 +1199,11 @@ namespace BandHero.Core
 
         void StartSong(SongEntry entry, string difficulty)
         {
-            LoadedSong song = _library.Load(entry, difficulty, out string error);
+            // The chart may not carry the saved difficulty; Load resolves what it can actually
+            // play, and the HUD/results report that same value rather than the preference.
+            string resolved = ChartDifficulty.Resolve(difficulty, entry.Difficulties);
+
+            LoadedSong song = _library.Load(entry, resolved, out string error);
 
             if (song == null)
             {
@@ -962,6 +1211,7 @@ namespace BandHero.Core
                 return;
             }
 
+            _activeDifficulty = resolved;
             _screen = Screen.Gameplay;
 
             var host = new GameObject("Gameplay");
@@ -977,7 +1227,7 @@ namespace BandHero.Core
             if (entry == null) return;
 
             TearDownGameplay();
-            StartSong(entry, _settings.Difficulty);
+            StartSong(entry, DifficultyFor(entry));
         }
 
         void TearDownGameplay()
@@ -1012,7 +1262,7 @@ namespace BandHero.Core
             {
                 Song = AppState.SelectedSong.DisplayName,
                 Artist = AppState.SelectedSong.Artist,
-                Difficulty = _settings.Difficulty,
+                Difficulty = _activeDifficulty.Length > 0 ? _activeDifficulty : _settings.Difficulty,
                 Score = session.Score.Score,
                 MaxCombo = session.Score.MaxCombo,
                 Accuracy = session.Score.Accuracy,

@@ -323,6 +323,9 @@ namespace BandHero.Gameplay
                 view.Ripple.transform.position = new Vector3(laneX, headY, 0f);
                 view.Ripple.transform.localScale = Vector3.one * (radius * 4f * (1f + progress * 1.6f));
 
+                // A hit note is a flash, not a gem, so the sheen would only muddy the bloom.
+                view.Gloss.enabled = false;
+
                 if (fade <= 0.01f) view.Root.SetActive(false);
                 return;
             }
@@ -356,6 +359,13 @@ namespace BandHero.Gameplay
             view.Core.color = new Color(core.r, core.g, core.b, note.Note.Hopo ? 0.95f : 0.75f);
             view.Core.transform.position = new Vector3(laneX, headY, 0f);
             view.Core.transform.localScale = Vector3.one * (radius * (note.Note.Hopo ? 1.25f : 1.0f) * pulse);
+
+            // The sheen sits on the body only, so the note keeps a glassy highlight while the
+            // halo behind it stays a flat bloom.
+            view.Gloss.enabled = true;
+            view.Gloss.color = new Color(1f, 1f, 1f, 0.80f);
+            view.Gloss.transform.position = new Vector3(laneX, headY, 0f);
+            view.Gloss.transform.localScale = Vector3.one * (radius * 2f * hopoScale * pulse);
         }
 
         void UpdateLaneFeedback(IList<bool> heldLanes)

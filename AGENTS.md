@@ -64,8 +64,27 @@ java -Xmx4096M -cp "/workspace/unity/Editor/Data/PlaybackEngines/AndroidPlayer/T
 
 Do not pass `--offline`: the Android Gradle plugin is resolved through the plugin portal, so
 offline fails at configuration. The result lands in `launcher/build/outputs/apk/release/`.
-This path only re-signs and re-packages existing native code — any C# change still needs the
-editor, so use it for version bumps and packaging, not for code changes.
+That path re-signs and re-packages native code that is already there. To ship a **C# change**
+without a licence, rebuild the IL2CPP stages by hand from the recorded Tundra DAG
+(`BandHero/Library/Bee/Player*.dag.json`), which stores the exact command line of every node:
+
+1. Compile `Assets/Scripts` with the saved Roslyn response file
+   (`Library/Bee/artifacts/*/Assembly-CSharp.rsp`) into
+   `Library/Bee/PlayerScriptAssemblies/Assembly-CSharp.dll`.
+2. Re-run the `Code-stripping Assemblies with UnityLinker` node into
+   `Library/Bee/artifacts/Android/ManagedStripped/`. Skipping this leaves the stripped assembly
+   referencing `netstandard`, and `il2cpp --convert-to-cpp` then dies with exit 255 inside
+   `DataModelBuilder.BuildCecilSourcedData`.
+3. Re-run the `Converting Assemblies with IL2CPP` node, which rewrites
+   `il2cppOutput/cpp/*` and `il2cppOutput/data/Metadata/global-metadata.dat`.
+4. Re-run each `Compiling Cpp`/`Compiling C` node whose source changed, then the two
+   `Linking il2cpp.a` and two `Linking libil2cpp.so` nodes, then the `NdkObjCopy` chain.
+5. Copy the stripped `libil2cpp.so` into
+   `Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/jniLibs/<abi>/` and the new
+   `global-metadata.dat` into `.../assets/bin/Data/Managed/Metadata/`, then run Gradle.
+
+Each node's `Action` field is the literal shell command; `CopyFiles` nodes have no action and
+need a plain `cp`. Delete nothing in `Library/Bee` first — the DAG names inputs by hash.
 
 `libicu` must be installed (`sudo apt-get install -y libicu76`). Without it the licensing
 client aborts with `Couldn't find a valid ICU package` and the build hangs until it times out.

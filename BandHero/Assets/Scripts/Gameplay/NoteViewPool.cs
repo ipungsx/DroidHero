@@ -19,6 +19,7 @@ namespace BandHero.Gameplay
             public GameObject Root;
             public SpriteRenderer Halo;
             public SpriteRenderer Body;
+            public SpriteRenderer Gloss;
             public SpriteRenderer Core;
             public SpriteRenderer Sustain;
             public SpriteRenderer Ripple;
@@ -45,8 +46,9 @@ namespace BandHero.Gameplay
             var sustain = Child(root.transform, "Sustain", ProceduralSprites.VerticalFade, _sortingOrder - 2);
             var halo = Child(root.transform, "Halo", ProceduralSprites.Glow, _sortingOrder - 1);
             var body = Child(root.transform, "Body", ProceduralSprites.Circle, _sortingOrder);
-            var core = Child(root.transform, "Core", ProceduralSprites.Glow, _sortingOrder + 1);
-            var ripple = Child(root.transform, "Ripple", ProceduralSprites.Ring, _sortingOrder + 2);
+            var gloss = Child(root.transform, "Gloss", ProceduralSprites.Gloss, _sortingOrder + 1);
+            var core = Child(root.transform, "Core", ProceduralSprites.Glow, _sortingOrder + 2);
+            var ripple = Child(root.transform, "Ripple", ProceduralSprites.Ring, _sortingOrder + 3);
 
             sustain.enabled = false;
             ripple.enabled = false;
@@ -56,6 +58,7 @@ namespace BandHero.Gameplay
                 Root = root,
                 Halo = halo,
                 Body = body,
+                Gloss = gloss,
                 Core = core,
                 Sustain = sustain,
                 Ripple = ripple,
@@ -107,6 +110,7 @@ namespace BandHero.Gameplay
             view.Ripple.enabled = false;
             view.Sustain.enabled = false;
             view.Core.enabled = true;
+            view.Gloss.enabled = true;
 
             return view;
         }

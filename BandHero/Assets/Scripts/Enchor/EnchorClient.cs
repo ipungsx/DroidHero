@@ -73,6 +73,9 @@ namespace BandHero.Enchor
             public string search;
             public int page;
             public string instrument;
+
+            // Null (omitted) asks the API for every difficulty, which is what the song screen
+            // wants now that difficulty is chosen per chart.
             public string difficulty;
 
             // The API validates this against an enum; "4" is rejected with a 400.
@@ -83,13 +86,14 @@ namespace BandHero.Enchor
         public IEnumerator Search(string query, int page, string instrument, string difficulty,
                                   Action<EnchorSearchResult> onSuccess, Action<string> onError)
         {
-            // The API only accepts lowercase enum values (expert/hard/medium/easy).
+            // The API only accepts lowercase enum values (expert/hard/medium/easy); an empty
+            // value is rejected, so an unfiltered search omits the field entirely.
             var body = new SearchRequest
             {
                 search = query ?? "",
                 page = Mathf.Max(1, page),
                 instrument = (instrument ?? InstrumentGuitar).ToLowerInvariant(),
-                difficulty = (difficulty ?? "expert").ToLowerInvariant()
+                difficulty = string.IsNullOrEmpty(difficulty) ? null : difficulty.ToLowerInvariant()
             };
 
             byte[] payload = Encoding.UTF8.GetBytes(JsonUtility.ToJson(body));

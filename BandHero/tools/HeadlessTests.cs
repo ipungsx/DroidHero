@@ -45,12 +45,16 @@ namespace BandHero.Tests
                 TestGameplay(path);
                 TestAudioDecoding(path);
                 TestDrumHits(path);
+                TestRealChartDifficulties(path);
             }
 
             TestPerspectiveHighway();
             TestDifficultyNaming();
+            TestDifficultyScanning();
             TestSettingsRoundTrip();
             TestLeaderboard();
+            TestLeaderboardClear();
+            TestSongDifficultyStore();
 
             Console.WriteLine();
             Console.WriteLine(_failures == 0
@@ -548,6 +552,49 @@ namespace BandHero.Tests
         }
 
         /// <summary>
+        /// Proves the difficulty scanner against a real enchor.us package: every difficulty it
+        /// reports must actually load notes, and every one it omits must really be absent.
+        /// </summary>
+        static void TestRealChartDifficulties(string path)
+        {
+            List<string> reported;
+
+            using (var sng = SngReader.Open(path))
+            {
+                string chartText = sng.ReadText("notes.chart");
+                reported = chartText != null
+                    ? ChartDifficultyScanner.FromChartText(chartText)
+                    : ChartDifficultyScanner.FromMidi(sng.ReadFirstWithExtension(".mid"));
+            }
+
+            Check(reported.Count > 0, "the chart reports at least one difficulty (" + reported.Count + ")");
+
+            for (int i = 0; i < reported.Count; i++)
+            {
+                SongChart chart = LoadChart(path, reported[i]);
+                Check(chart.Notes.Count > 0, reported[i] + " reports notes when loaded");
+            }
+
+            for (int i = 0; i < ChartDifficulty.All.Length; i++)
+            {
+                string difficulty = ChartDifficulty.All[i];
+                if (reported.Contains(difficulty)) continue;
+
+                // An omitted difficulty must be genuinely empty, not just unlisted.
+                try
+                {
+                    SongChart chart = LoadChart(path, difficulty);
+                    Check(chart.Notes.Count == 0,
+                          difficulty + " is not offered and really has no notes");
+                }
+                catch (Exception)
+                {
+                    Pass(difficulty + " is not offered and cannot be loaded");
+                }
+            }
+        }
+
+        /// <summary>
         /// The light show is driven by drum onsets. A chart with no drum track must still produce
         /// onsets (falling back to the guitar notes) or the stage would stay dark for the song.
         /// </summary>
@@ -750,6 +797,143 @@ namespace BandHero.Tests
                 ScoreRecord fresh = new ScoreRecord { Song = "Song", Difficulty = "Expert", Score = 12000, Accuracy = 99f, MaxCombo = 200 };
                 Check(board.Submit(fresh), "a new best run is ranked");
                 Check(board.Top("Song", "Expert")[0].Score == 12000, "a new best run takes first place");
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        /// <summary>
+        /// The difficulty menu is driven by what a chart really contains, so the scanner is
+        /// tested against synthetic .chart text and against a real downloaded package.
+        /// </summary>
+        static void TestDifficultyScanning()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- difficulty scanning ---");
+
+            const string chartText =
+                "[Song]\n{\n  Name = Test\n}\n" +
+                "[EasySingle]\n{\n  0 = N 0 0\n}\n" +
+                "[ExpertSingle]\n{\n  0 = N 0 0\n  192 = N 1 0\n}\n" +
+                "[HardDrums]\n{\n  0 = N 0 0\n}\n";
+
+            List<string> found = ChartDifficultyScanner.FromChartText(chartText);
+            Check(found.Count == 2, "only charted difficulties are reported");
+            Check(found[0] == "Easy", "difficulties come back in canonical order");
+            Check(found[1] == "Expert", "a charted Expert section is reported");
+            Check(!found.Contains("Normal"), "a missing section is not offered");
+            Check(!found.Contains("Hard"), "a drum-only section does not count as guitar");
+
+            // A section header with no notes must not be offered: it would load zero notes.
+            const string emptySection = "[Song]\n{\n  Name = Test\n}\n[MediumSingle]\n{\n}\n";
+            Check(ChartDifficultyScanner.FromChartText(emptySection).Count == 0,
+                  "an empty section is not offered");
+
+            // Star power lines alone are not notes.
+            const string starOnly = "[Song]\n{\n  Name = Test\n}\n[HardSingle]\n{\n  0 = S 2 100\n}\n";
+            Check(ChartDifficultyScanner.FromChartText(starOnly).Count == 0,
+                  "star power phrases do not count as notes");
+
+            Check(ChartDifficultyScanner.FromChartText(null).Count == 0, "null chart text is handled");
+            Check(ChartDifficultyScanner.FromChartText("").Count == 0, "empty chart text is handled");
+
+            var single = new List<string> { "Expert" };
+            Check(ChartDifficulty.Resolve("Expert", single) == "Expert",
+                  "the requested difficulty is kept when charted");
+            Check(ChartDifficulty.Resolve("Easy", single) == "Expert",
+                  "a missing difficulty falls back to the hardest charted one");
+
+            Check(ChartDifficulty.Resolve("Hard", new List<string>()) == "Hard",
+                  "an unscanned chart keeps the request");
+            Check(ChartDifficulty.Resolve("Hard", null) == "Hard",
+                  "a null difficulty list keeps the request");
+
+            var multi = new List<string> { "Easy", "Hard" };
+            Check(ChartDifficulty.Resolve("Hard", multi) == "Hard",
+                  "the requested difficulty wins when several are charted");
+            Check(ChartDifficulty.Resolve("hard", multi) == "Hard",
+                  "difficulty matching ignores case");
+        }
+
+        /// <summary>Clearing is a real feature now, so it has to be proven to persist.</summary>
+        static void TestLeaderboardClear()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- leaderboard clearing ---");
+
+            string root = Path.Combine(Path.GetTempPath(), "bh_clear_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                var board = new Leaderboard(root);
+                board.Submit(new ScoreRecord { Song = "A", Difficulty = "Expert", Score = 1000, Accuracy = 90f });
+                board.Submit(new ScoreRecord { Song = "A", Difficulty = "Easy", Score = 500, Accuracy = 80f });
+                board.Submit(new ScoreRecord { Song = "B", Difficulty = "Expert", Score = 700, Accuracy = 85f });
+
+                Check(board.Count == 3, "three runs are recorded");
+
+                board.Clear("A", "Expert");
+                Check(board.Count == 2, "clearing one group leaves the others");
+                Check(board.BestScore("A", "Expert") == 0, "the cleared group is empty");
+                Check(board.BestScore("A", "Easy") == 500, "another difficulty of the same song is kept");
+
+                var reloaded = new Leaderboard(root);
+                Check(reloaded.Count == 2, "a clear survives a restart");
+
+                reloaded.Clear();
+                Check(reloaded.Count == 0, "clearing all empties the board");
+                Check(new Leaderboard(root).Count == 0, "a full clear survives a restart");
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
+        /// <summary>
+        /// Difficulty is remembered per chart, so two songs can sit on different difficulties and
+        /// a remembered one that the chart no longer carries must fall back safely.
+        /// </summary>
+        static void TestSongDifficultyStore()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- per-song difficulty ---");
+
+            string root = Path.Combine(Path.GetTempPath(), "bh_songdiff_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                string file = Path.Combine(root, "song_difficulties.txt");
+                var store = new SongDifficultyStore(file);
+
+                Check(store.Get("/charts/a.sng") == null, "a song has no difficulty until it is played");
+                Check(store.Resolve("/charts/a.sng", "Expert", new List<string> { "Easy", "Hard" }) == "Hard",
+                      "an unplayed song uses the default resolved against the chart");
+
+                store.Set("/charts/a.sng", "Easy");
+                store.Set("/charts/b.sng", "Hard");
+
+                Check(store.Get("/charts/a.sng") == "Easy", "a choice is stored against its own song");
+                Check(store.Get("/charts/b.sng") == "Hard", "another song keeps its own choice");
+                Check(store.Resolve("/charts/a.sng", "Expert", new List<string> { "Easy", "Hard" }) == "Easy",
+                      "the remembered choice wins over the default");
+
+                var reopened = new SongDifficultyStore(file);
+                Check(reopened.Get("/charts/a.sng") == "Easy", "a per-song choice survives a restart");
+                Check(reopened.Count == 2, "both songs are remembered");
+
+                // A chart re-downloaded with fewer sections must not resolve to a missing one.
+                Check(reopened.Resolve("/charts/a.sng", "Expert", new List<string> { "Expert" }) == "Expert",
+                      "a remembered difficulty the chart lacks falls back to what it charts");
+
+                reopened.Set("/charts/a.sng", null);
+                Check(reopened.Get("/charts/a.sng") == null, "a choice can be forgotten");
+                Check(new SongDifficultyStore(file).Get("/charts/b.sng") == "Hard",
+                      "forgetting one song leaves the other alone");
             }
             finally
             {

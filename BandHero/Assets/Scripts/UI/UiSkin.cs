@@ -28,6 +28,10 @@ namespace BandHero.UI
         static Texture2D _accentDimTex;
         static Texture2D _roundedTex;
         static Texture2D _roundedLightTex;
+        static Texture2D _roundedAccentTex;
+        static Texture2D _roundedAccentDimTex;
+        static Texture2D _roundedGhostTex;
+        static Texture2D _chipTex;
         static Texture2D _whiteTex;
         static Font _font;
 
@@ -66,6 +70,48 @@ namespace BandHero.UI
             {
                 if (_roundedLightTex == null) _roundedLightTex = Rounded(24, PanelLight);
                 return _roundedLightTex;
+            }
+        }
+
+        /// <summary>Rounded fill for the selected/accent state, so a chip and a button match.</summary>
+        public static Texture2D RoundedAccentTex
+        {
+            get
+            {
+                if (_roundedAccentTex == null) _roundedAccentTex = Rounded(24, Accent);
+                return _roundedAccentTex;
+            }
+        }
+
+        public static Texture2D RoundedAccentDimTex
+        {
+            get
+            {
+                if (_roundedAccentDimTex == null) _roundedAccentDimTex = Rounded(24, AccentDim);
+                return _roundedAccentDimTex;
+            }
+        }
+
+        public static Texture2D RoundedGhostTex
+        {
+            get
+            {
+                if (_roundedGhostTex == null) _roundedGhostTex = Rounded(24, PanelTranslucent);
+                return _roundedGhostTex;
+            }
+        }
+
+        /// <summary>
+        /// Chip fill: white so callers tint it, with a small radius. A pill would round the
+        /// selected chip into a lozenge and make it read as a different control than its
+        /// neighbours, so the corners stay only slightly turned.
+        /// </summary>
+        public static Texture2D ChipTex
+        {
+            get
+            {
+                if (_chipTex == null) _chipTex = Rounded(9, Color.white);
+                return _chipTex;
             }
         }
 
@@ -218,22 +264,24 @@ namespace BandHero.UI
             padding = new RectOffset(ScaledSize(16), ScaledSize(16), ScaledSize(10), ScaledSize(10)),
             border = new RectOffset(24, 24, 24, 24),
             normal = { background = RoundedLightTex, textColor = TextPrimary },
-            hover = { background = AccentDimTex, textColor = TextPrimary },
-            active = { background = AccentTex, textColor = Color.black }
+            hover = { background = RoundedAccentDimTex, textColor = TextPrimary },
+            active = { background = RoundedAccentTex, textColor = Color.black }
         });
 
         public static GUIStyle ButtonAccent => _buttonAccent ?? (_buttonAccent = new GUIStyle(Button)
         {
-            normal = { background = AccentTex, textColor = Color.black },
-            hover = { background = AccentTex, textColor = Color.black }
+            normal = { background = RoundedAccentTex, textColor = Color.black },
+            hover = { background = RoundedAccentTex, textColor = Color.black },
+            active = { background = RoundedAccentTex, textColor = Color.black }
         });
 
         /// <summary>Low-emphasis button for secondary actions such as BACK.</summary>
         public static GUIStyle ButtonGhost => _buttonGhost ?? (_buttonGhost = new GUIStyle(Button)
         {
             fontSize = ScaledSize(18),
-            normal = { background = PanelTranslucentTex, textColor = TextMuted },
-            hover = { background = RoundedLightTex, textColor = TextPrimary }
+            normal = { background = RoundedGhostTex, textColor = TextMuted },
+            hover = { background = RoundedLightTex, textColor = TextPrimary },
+            active = { background = RoundedAccentDimTex, textColor = TextPrimary }
         });
 
         static Texture2D _panelTranslucentTex;
@@ -302,7 +350,7 @@ namespace BandHero.UI
         {
             Color previous = GUI.color;
             GUI.color = selected ? accent : new Color(1f, 1f, 1f, 0.10f);
-            GUI.DrawTexture(rect, RoundedLightTex, ScaleMode.StretchToFill, true);
+            GUI.DrawTexture(rect, ChipTex, ScaleMode.StretchToFill, true);
             GUI.color = previous;
 
             var style = new GUIStyle(CenterBold)

@@ -8,14 +8,19 @@ copyrighted is shipped with the game.
 
 | Feature | Detail |
 | --- | --- |
-| Chart search | Queries the enchor.us API by song or artist, filtered by instrument and difficulty |
+| Chart search | Queries the enchor.us API by song or artist, unfiltered so every chart shows |
 | Chart download | Fetches the `.sng` package and saves it locally for offline play |
 | Local music | Android file picker copies a song from your device into app storage |
-| Difficulties | Easy, Medium, Hard, Expert from the chart's own note tracks |
+| Difficulties | Only the difficulties a chart really contains are offered, read from its note tracks |
+| Stage | A concert backdrop behind the highway: guitar prop, crowd, beams, confetti |
 | Scoring | Per-note judgement, combo multiplier, star power, sustain notes, star rating |
 | Input | Multi-touch five-lane highway, sized for a phone in portrait |
 | HUD | Live score, combo, star power meter, judgement popups, pause and quit |
 | Calibration | Device-wide sync offset in 5 ms and 20 ms steps, saved between runs |
+
+The song screen is two steps: pick a chart from the list, then pick one of the difficulties
+that chart actually carries. Picking a difficulty first was wrong, because a chart can ship
+Expert only and the player had no way to know before starting.
 
 Charts ship an Ogg Opus audio track. Unity cannot decode Opus, so the project carries its own
 decoder (see [Audio](#audio)).
