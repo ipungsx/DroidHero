@@ -45,6 +45,35 @@ failed loudly before the next was satisfied:
 - Gradle writes into the project as root; `sudo rm -rf .utmp Library/Bee Library/Android` clears
   a cache the current user cannot remove.
 
+### When the licence is gone
+
+The editor licence lives in the container's home directory, so a container restart can lose it.
+Then every build stops at `No valid Unity Editor license found` and the log shows
+`Processed 0 license files`. You do not need to re-activate Unity to ship an APK: the previous
+successful build leaves a complete Gradle project in
+`BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle`, with `libil2cpp.so`, `libunity.so` and the
+Unity data already staged. Bump `versionName`/`versionCode` in `launcher/build.gradle` and
+`gradle.properties`, then run Gradle from that directory:
+
+```bash
+cd BandHero/Library/Bee/Android/Prj/IL2CPP/Gradle
+export JAVA_HOME=/workspace/unity/jdk ANDROID_HOME=/workspace/unity/sdk
+java -Xmx4096M -cp "/workspace/unity/Editor/Data/PlaybackEngines/AndroidPlayer/Tools/gradle/lib/*" \
+  org.gradle.launcher.GradleMain assembleRelease --no-daemon
+```
+
+Do not pass `--offline`: the Android Gradle plugin is resolved through the plugin portal, so
+offline fails at configuration. The result lands in `launcher/build/outputs/apk/release/`.
+This path only re-signs and re-packages existing native code — any C# change still needs the
+editor, so use it for version bumps and packaging, not for code changes.
+
+`libicu` must be installed (`sudo apt-get install -y libicu76`). Without it the licensing
+client aborts with `Couldn't find a valid ICU package` and the build hangs until it times out.
+
+The debug keystore also lives in the home directory, so a restarted container signs with a new
+key. Android refuses to upgrade an app across signing keys, so anyone who installed an earlier
+build must uninstall it before installing the new APK.
+
 `run-tests.sh` compiles with Mono `mcs` from `/workspace/unity/Editor/Data/MonoBleedingEdge/bin`.
 Anything touching `UnityEngine` must be added to its exclusion list — a new UI/input file will
 otherwise break the harness with `CS0246 MonoBehaviour`.
