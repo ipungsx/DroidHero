@@ -46,3 +46,24 @@ but whose type table still describes the old assemblies.
 Skipping any of steps 4 and 5 leaves an APK that builds and installs fine but still runs
 the old code. Check with `md5sum` on the APK's `lib/<abi>/libil2cpp.so` against the objcopy
 output, not with `nm` — the stripped library keeps no local symbols.
+
+## Packaging by hand
+
+The Gradle template under `Library/Bee/Android/Prj/IL2CPP/Gradle/` is generated once and
+then never refreshed, so `gradle.properties` and `launcher/build.gradle` keep the
+applicationId, namespace and version of whatever release generated it. After a rename or a
+version bump, edit both files before packaging or the APK ships the old identity.
+
+There is no `gradlew` wrapper in that directory and no `gradle` on PATH. Run the bundled
+distribution directly:
+
+```
+JAVA_HOME=/workspace/unity/jdk /workspace/unity/jdk/bin/java -Xmx4096m \
+  -cp "/workspace/unity/Editor/Data/PlaybackEngines/AndroidPlayer/Tools/gradle/lib/*" \
+  org.gradle.launcher.GradleMain --offline :launcher:assembleRelease
+```
+
+The APK lands in `launcher/build/outputs/apk/release/launcher-release.apk`. Check its
+identity with `aapt2 dump badging` and its orientation with
+`aapt2 dump xmltree --file AndroidManifest.xml`, both under
+`/workspace/unity/sdk/build-tools/36.0.0/`.
