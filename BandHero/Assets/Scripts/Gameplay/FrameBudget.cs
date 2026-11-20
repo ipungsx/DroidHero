@@ -89,14 +89,20 @@ namespace BandHero.Gameplay
                 case 0:
                     _stage.ActiveLightCount = MinLights;
                     _stage.BeamShowEnabled = false;
+                    _stage.ConfettiEnabled = false;
                     break;
                 case 1:
+                    // Confetti is dozens of sprites and reads as decoration, so it is the first
+                    // thing to go: a phone that cannot hold 60fps should lose confetti before it
+                    // loses lighting.
                     _stage.ActiveLightCount = (MinLights + MaxLights) / 2;
                     _stage.BeamShowEnabled = false;
+                    _stage.ConfettiEnabled = false;
                     break;
                 default:
                     _stage.ActiveLightCount = MaxLights;
                     _stage.BeamShowEnabled = true;
+                    _stage.ConfettiEnabled = true;
                     break;
             }
         }

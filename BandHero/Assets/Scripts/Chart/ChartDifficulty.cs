@@ -66,5 +66,25 @@ namespace BandHero.Chart
 
             return All.Length - 1;
         }
+
+        /// <summary>
+        /// Picks the difficulty to load: the requested one when the chart has it, otherwise the
+        /// hardest available. An empty list keeps the request, so a package this build cannot
+        /// introspect behaves exactly as it did before detection existed.
+        /// </summary>
+        public static string Resolve(string requested, System.Collections.Generic.IList<string> available)
+        {
+            if (available == null || available.Count == 0) return requested;
+
+            for (int i = 0; i < available.Count; i++)
+            {
+                if (string.Equals(available[i], requested, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return available[i];
+                }
+            }
+
+            return available[available.Count - 1];
+        }
     }
 }

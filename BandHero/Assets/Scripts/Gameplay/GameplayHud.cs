@@ -42,7 +42,6 @@ namespace BandHero.Gameplay
         float _starPowerShown;
 
         bool _paused;
-        bool _showDebug;
 
         public bool IsPaused => _paused;
 

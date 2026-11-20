@@ -29,6 +29,13 @@ namespace BandHero.Core
         /// <summary>Decoded album art, cached because the song list is redrawn every frame.</summary>
         public UnityEngine.Texture2D AlbumTexture;
 
+        /// <summary>
+        /// Difficulties this chart actually charts, in canonical order. Empty until the chart is
+        /// inspected; the menu falls back to every difficulty only when this is empty.
+        /// </summary>
+        public System.Collections.Generic.List<string> Difficulties =
+            new System.Collections.Generic.List<string>();
+
         public bool HasLocalAudio => !string.IsNullOrEmpty(LocalAudioPath);
 
         public string Subtitle =>

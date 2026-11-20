@@ -16,12 +16,17 @@ namespace BandHero.Gameplay
     {
         const int MaxLights = 14;
         const int BeamCount = 6;
+        const int ConfettiCount = 26;
 
         readonly List<float> _hits = new List<float>();
         readonly float[] _lightEnergy = new float[MaxLights];
         readonly float[] _lightPhase = new float[MaxLights];
         readonly SpriteRenderer[] _lights = new SpriteRenderer[MaxLights];
         readonly SpriteRenderer[] _beams = new SpriteRenderer[BeamCount];
+        readonly SpriteRenderer[] _confetti = new SpriteRenderer[ConfettiCount];
+        readonly float[] _confettiPhase = new float[ConfettiCount];
+        readonly float[] _confettiSpeed = new float[ConfettiCount];
+        readonly float[] _confettiSpin = new float[ConfettiCount];
 
         readonly List<SpriteRenderer> _crowd = new List<SpriteRenderer>(64);
 
@@ -29,10 +34,14 @@ namespace BandHero.Gameplay
         bool _beatPending;
         int _lightsEnabled = MaxLights;
         bool _beamsEnabled = true;
+        bool _confettiEnabled = true;
 
         SpriteRenderer _backdrop;
         SpriteRenderer _glow;
         SpriteRenderer _floor;
+        SpriteRenderer _guitar;
+        SpriteRenderer _guitarGlow;
+        SpriteRenderer _spotWash;
 
         float _flash;
         int _flashSide = -1;
@@ -50,6 +59,20 @@ namespace BandHero.Gameplay
                 for (int i = 0; i < _beams.Length; i++)
                 {
                     if (_beams[i] != null) _beams[i].enabled = value;
+                }
+            }
+        }
+
+        /// <summary>Confetti is the cheapest thing to drop first: it is pure decoration.</summary>
+        public bool ConfettiEnabled
+        {
+            get => _confettiEnabled;
+            set
+            {
+                _confettiEnabled = value;
+                for (int i = 0; i < _confetti.Length; i++)
+                {
+                    if (_confetti[i] != null) _confetti[i].enabled = value;
                 }
             }
         }
@@ -74,9 +97,71 @@ namespace BandHero.Gameplay
             if (chart != null) _hits.AddRange(chart.DrumHits);
 
             BuildBackdrop();
+            BuildGuitarProp();
             BuildCrowd();
             BuildLights();
             BuildBeams();
+            BuildConfetti();
+        }
+
+        /// <summary>
+        /// A guitar standing behind the highway, lit by a warm wash. It gives the playfield a
+        /// subject to scroll in front of, which is what makes the 2D perspective read as depth
+        /// rather than as a flat column of notes.
+        /// </summary>
+        void BuildGuitarProp()
+        {
+            var root = new GameObject("GuitarProp");
+            root.transform.SetParent(transform, false);
+
+            var glow = new GameObject("GuitarGlow");
+            glow.transform.SetParent(root.transform, false);
+            _guitarGlow = glow.AddComponent<SpriteRenderer>();
+            _guitarGlow.sprite = ProceduralSprites.Glow;
+            _guitarGlow.sortingOrder = -57;
+            _guitarGlow.transform.position = new Vector3(0f, 0.4f, 0f);
+            _guitarGlow.transform.localScale = new Vector3(6f, 8f, 1f);
+
+            var guitar = new GameObject("Guitar");
+            guitar.transform.SetParent(root.transform, false);
+            _guitar = guitar.AddComponent<SpriteRenderer>();
+            _guitar.sprite = ProceduralSprites.Guitar;
+            _guitar.sortingOrder = -56;
+            // The sprite is 256x512 at 100 pixels per unit, so a scale of one already stands
+            // 5.1 world units tall. The camera shows 12.8, and the prop has to sit behind the
+            // highway rather than fill the screen, hence the fraction below.
+            _guitar.transform.position = new Vector3(0f, 0.1f, 0f);
+            _guitar.transform.localScale = new Vector3(0.92f, 0.92f, 1f);
+            _guitar.transform.rotation = Quaternion.Euler(0f, 0f, -9f);
+        }
+
+        /// <summary>
+        /// Falling confetti, drawn behind the highway so it never competes with a note.
+        /// Positions come from a per-shard phase, so the fall loops without allocation.
+        /// </summary>
+        void BuildConfetti()
+        {
+            var root = new GameObject("Confetti");
+            root.transform.SetParent(transform, false);
+
+            for (int i = 0; i < ConfettiCount; i++)
+            {
+                var shard = new GameObject("Shard" + i);
+                shard.transform.SetParent(root.transform, false);
+
+                var renderer = shard.AddComponent<SpriteRenderer>();
+                renderer.sprite = ProceduralSprites.Confetti;
+                renderer.sortingOrder = -55;
+
+                float t = i / (float)Mathf.Max(1, ConfettiCount - 1);
+                renderer.transform.position = new Vector3(Mathf.Lerp(-10f, 10f, t), 0f, 0f);
+                renderer.transform.localScale = Vector3.one * (0.10f + (i % 4) * 0.03f);
+
+                _confetti[i] = renderer;
+                _confettiPhase[i] = (i * 0.37f) % 1f;
+                _confettiSpeed[i] = 0.045f + (i % 5) * 0.012f;
+                _confettiSpin[i] = (i % 2 == 0 ? 1f : -1f) * (35f + (i % 7) * 12f);
+            }
         }
 
         void BuildBackdrop()
@@ -95,10 +180,20 @@ namespace BandHero.Gameplay
             glow.transform.SetParent(transform, false);
             _glow = glow.AddComponent<SpriteRenderer>();
             _glow.sprite = ProceduralSprites.Glow;
-            _glow.color = new Color(1f, 1f, 1f, 0.10f);
+            _glow.color = new Color(1f, 1f, 1f, 0.22f);
             _glow.sortingOrder = -59;
             _glow.transform.position = new Vector3(0f, 0.4f, 0f);
             _glow.transform.localScale = new Vector3(20f, 12f, 1f);
+
+            // A wide, soft wash from the truss keeps the stage bright without hiding the notes.
+            var wash = new GameObject("SpotWash");
+            wash.transform.SetParent(transform, false);
+            _spotWash = wash.AddComponent<SpriteRenderer>();
+            _spotWash.sprite = ProceduralSprites.Beam;
+            _spotWash.color = new Color(1f, 0.96f, 0.86f, 0.10f);
+            _spotWash.sortingOrder = -59;
+            _spotWash.transform.position = new Vector3(0f, 2.6f, 0f);
+            _spotWash.transform.localScale = new Vector3(22f, 16f, 1f);
 
             var floor = new GameObject("StageFloor");
             floor.transform.SetParent(transform, false);
@@ -229,7 +324,66 @@ namespace BandHero.Gameplay
             }
 
             UpdateBeams(songTime);
+            UpdateConfetti(songTime);
+            UpdateGuitarProp(songTime);
             UpdateBackdrop(deltaTime);
+        }
+
+        /// <summary>
+        /// Loops the confetti downward. Each shard's height is a sawtooth of its own phase, so
+        /// the field never empties and no allocation or respawn bookkeeping is needed.
+        /// </summary>
+        void UpdateConfetti(float songTime)
+        {
+            if (!_confettiEnabled) return;
+
+            for (int i = 0; i < _confetti.Length; i++)
+            {
+                if (_confetti[i] == null) continue;
+
+                float t = Mathf.Repeat(_confettiPhase[i] + songTime * _confettiSpeed[i], 1f);
+                float y = Mathf.Lerp(8.5f, -7.5f, t);
+
+                // A slow sway across the width stops the fall from looking like rain. X is
+                // derived from the shard's index each frame, so it can never drift.
+                float baseX = Mathf.Lerp(-10f, 10f, i / (float)Mathf.Max(1, ConfettiCount - 1));
+                float sway = Mathf.Sin(songTime * 0.8f + i * 1.7f) * 0.55f;
+
+                _confetti[i].transform.position = new Vector3(baseX + sway, y, 0f);
+                _confetti[i].transform.rotation = Quaternion.Euler(0f, 0f, songTime * _confettiSpin[i] + i * 23f);
+
+                Color color = i % 3 == 0 ? LaneTheme.BeamColorA
+                            : i % 3 == 1 ? LaneTheme.BeamColorB
+                            : LaneTheme.AccentColor;
+
+                // Fade at both ends of the loop so a shard never pops into existence.
+                float fade = Mathf.Clamp01(Mathf.Min(t * 6f, (1f - t) * 6f));
+                color.a = 0.55f * fade + _flash * 0.25f;
+                _confetti[i].color = color;
+            }
+        }
+
+        /// <summary>Breathes the guitar prop with the beat, as if it were being strummed.</summary>
+        void UpdateGuitarProp(float songTime)
+        {
+            if (_guitar == null) return;
+
+            float sway = Mathf.Sin(songTime * 0.7f) * 2.4f;
+            _guitar.transform.rotation = Quaternion.Euler(0f, 0f, -9f + sway + _flash * 1.6f);
+
+            Color tint = LaneTheme.HighwayEdgeColor;
+            _guitar.color = new Color(
+                Mathf.Lerp(0.30f, tint.r, 0.55f) + _flash * 0.22f,
+                Mathf.Lerp(0.30f, tint.g, 0.55f) + _flash * 0.22f,
+                Mathf.Lerp(0.34f, tint.b, 0.55f) + _flash * 0.22f,
+                0.92f);
+
+            if (_guitarGlow != null)
+            {
+                Color glow = LaneTheme.BackgroundGlowColor;
+                glow.a = 0.16f + _flash * 0.20f;
+                _guitarGlow.color = glow;
+            }
         }
 
         void FireDueHits(float songTime)
@@ -284,9 +438,16 @@ namespace BandHero.Gameplay
             if (_glow != null)
             {
                 Color glow = LaneTheme.BackgroundGlowColor;
-                glow.a = 0.08f + _flash * 0.22f;
+                glow.a = 0.18f + _flash * 0.24f;
                 _glow.color = glow;
                 _glow.transform.localScale = new Vector3(20f + _flash * 3f, 12f + _flash * 2f, 1f);
+            }
+
+            if (_spotWash != null)
+            {
+                Color wash = _spotWash.color;
+                wash.a = 0.10f + _flash * 0.16f;
+                _spotWash.color = wash;
             }
 
             _flash = Mathf.Max(0f, _flash - deltaTime * 4.5f);

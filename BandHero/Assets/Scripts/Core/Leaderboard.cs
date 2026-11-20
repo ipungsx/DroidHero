@@ -142,6 +142,23 @@ namespace BandHero.Core
             return top.Count > 0 ? top[0].Score : 0;
         }
 
+        /// <summary>Wipes the board, either entirely or for one song/difficulty group.</summary>
+        public void Clear(string song = null, string difficulty = null)
+        {
+            if (string.IsNullOrEmpty(song))
+            {
+                _records.Clear();
+            }
+            else
+            {
+                string key = ScoreRecord.EntryKey(song, difficulty);
+                _records.RemoveAll(r => r.Key == key);
+            }
+
+            _dirty = true;
+            Save();
+        }
+
         /// <summary>Higher score first, then accuracy, then combo. Never returns 0 for distinct runs.</summary>
         static int Compare(ScoreRecord a, ScoreRecord b)
         {
