@@ -47,6 +47,23 @@ Skipping any of steps 4 and 5 leaves an APK that builds and installs fine but st
 the old code. Check with `md5sum` on the APK's `lib/<abi>/libil2cpp.so` against the objcopy
 output, not with `nm` — the stripped library keeps no local symbols.
 
+### The DAG stores absolute paths from the build that wrote it
+
+`Library/Bee/Player*.dag.json` records each node's command line verbatim, including absolute
+input paths. After the project directory is renamed, the arm64 nodes may point at the new path
+while the arm32 nodes still name the old one, so a relink of `armeabi-v7a` fails or silently
+reuses the previous objects and the APK ships two ABIs built from different C#. v1.4.0 did
+this: `arm64-v8a` had `DroidHeroApp`, `armeabi-v7a` still had `BandHeroApp`, and the app drew
+nothing. Always relink **both** ABIs and check the result per ABI before packaging:
+
+```bash
+grep -c DroidHeroApp Library/Bee/artifacts/objcopy_*/libil2cpp.sym.so
+grep -c BandHeroApp Library/Bee/artifacts/objcopy_*/libil2cpp.sym.so   # must be 0
+```
+
+A stale ABI also carries the old `global-metadata.dat` expectations, so the mismatch shows up
+as a black screen rather than a load error.
+
 ### Renaming a class does not rename the scene's copy of it
 
 Steps 1–5 above rebuild the managed and native code, but nothing re-serialises the player
@@ -61,12 +78,35 @@ A real Editor build re-serialises those files. Without a licence, patch them dir
 overwrite keeps every later offset valid. That works whenever the new string lands in the same
 aligned field: `BandHero.Gameplay` (17) and `DroidHero.Gameplay` (18) both round to 20, and
 `BandHeroApp` (11) and `DroidHeroApp` (12) both round to 12. A bare `BandHero` (8) does not
-fit `DroidHero` (9), which is why the scene's root object was renamed with UnityPy instead.
+fit `DroidHero` (9), so that one has to be re-serialised.
 
 ```
 globalgamemanagers.assets.split0: 39 namespaces and class names
 level0: 1, the scene's root GameObject m_Name
 ```
+
+### Re-serialising level0 must keep 16-byte alignment
+
+Unity 6 aligns every object in a `SerializedFile` to **16 bytes**, and lays out the object
+table from that alignment. UnityPy pads to 8 (`data_writer.align_stream(8)` in
+`SerializedFile.save`), so a plain `env.file.save()` shrinks the file and leaves object
+offsets that Unity never produces. The shipped v1.4.0 did exactly that: `level0` went from
+1632 to 1616 bytes and three objects landed on offsets 744, 808 and 952, none 16-aligned,
+while every asset in the working v1.3.1 build is 16-aligned. That is the black screen.
+
+Force the writer to Unity's alignment before saving, and prove it reproduces Unity by
+round-tripping the untouched scene — the output must equal the input byte for byte:
+
+```python
+from UnityPy.streams import EndianBinaryWriter
+_orig = EndianBinaryWriter.align_stream
+EndianBinaryWriter.align_stream = lambda self, a=4: _orig(self, 16 if a == 8 else a)
+
+env = UnityPy.load(pristine)          # assets/bin/Data/level0 from a real build
+assert env.file.save() == pristine    # if this fails, do not ship the patched file
+```
+
+Then rename and save. The result must still report `byte_start % 16 == 0` for every object.
 
 Verify by concatenating `globalgamemanagers.assets.split*` and parsing it with UnityPy: every
 `MonoScript` should report the new namespace, and the `path_id` the scene points at should
