@@ -79,6 +79,9 @@ without a licence, rebuild the IL2CPP stages by hand from the recorded Tundra DA
    `il2cppOutput/cpp/*` and `il2cppOutput/data/Metadata/global-metadata.dat`.
 4. Re-run each `Compiling Cpp`/`Compiling C` node whose source changed, then the two
    `Linking il2cpp.a` and two `Linking libil2cpp.so` nodes, then the `NdkObjCopy` chain.
+   A full recompile of `il2cppOutput/cpp` leaves `il2cpp.a` holding the *old* object list, so
+   run `llvm-ar r <arch>/il2cpp.a <arch>/*.o` first. The archive is the linker's only input;
+   without that step the new `.o` files are silently ignored and the APK keeps the old code.
 5. Copy the stripped `libil2cpp.so` into
    `Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/jniLibs/<abi>/` and the new
    `global-metadata.dat` into `.../assets/bin/Data/Managed/Metadata/`, then run Gradle.
