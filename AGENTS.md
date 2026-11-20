@@ -92,6 +92,10 @@ need a plain `cp`. Delete nothing in `Library/Bee` first — the DAG names input
 `libicu` must be installed (`sudo apt-get install -y libicu76`). Without it the licensing
 client aborts with `Couldn't find a valid ICU package` and the build hangs until it times out.
 
+The `NdkObjCopy` chain reads `Library/Bee/artifacts/objcopy_*/libil2cpp.dbg.so`, not the freshly
+linked `.so`. Copy the new link output over that file before running the three objcopy nodes, or
+the stripped library and the debug symbols both stay stale.
+
 The debug keystore also lives in the home directory, so a restarted container signs with a new
 key. Android refuses to upgrade an app across signing keys, so anyone who installed an earlier
 build must uninstall it before installing the new APK.
