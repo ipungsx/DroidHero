@@ -14,7 +14,8 @@ namespace BandHero.Enchor
         public string artist;
         public string album;
         public string genre;
-        public int year;
+        // The API sends this as a quoted string ("2004"), not a number.
+        public string year;
         public string charter;
         public string md5;
         public string chartHash;
@@ -67,36 +68,12 @@ namespace BandHero.Enchor
 
         public string SongUrl(string md5) => FilesBase + "/" + md5 + ".sng";
 
-        [Serializable]
-        class SearchRequest
-        {
-            public string search;
-            public int page;
-            public string instrument;
-
-            // Null (omitted) asks the API for every difficulty, which is what the song screen
-            // wants now that difficulty is chosen per chart.
-            public string difficulty;
-
-            // The API validates this against an enum; "4" is rejected with a 400.
-            public string drumType = "fourLane";
-        }
-
         /// <summary>Searches charts. Yields the parsed result for use inside a coroutine.</summary>
         public IEnumerator Search(string query, int page, string instrument, string difficulty,
                                   Action<EnchorSearchResult> onSuccess, Action<string> onError)
         {
-            // The API only accepts lowercase enum values (expert/hard/medium/easy); an empty
-            // value is rejected, so an unfiltered search omits the field entirely.
-            var body = new SearchRequest
-            {
-                search = query ?? "",
-                page = Mathf.Max(1, page),
-                instrument = (instrument ?? InstrumentGuitar).ToLowerInvariant(),
-                difficulty = string.IsNullOrEmpty(difficulty) ? null : difficulty.ToLowerInvariant()
-            };
-
-            byte[] payload = Encoding.UTF8.GetBytes(JsonUtility.ToJson(body));
+            byte[] payload = Encoding.UTF8.GetBytes(
+                EnchorSearchRequest.Build(query, page, instrument, difficulty));
 
             using (var request = new UnityWebRequest(ApiBase + "/search", "POST"))
             {
