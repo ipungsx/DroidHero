@@ -7,12 +7,17 @@ Two things make it different from most games in this genre:
 
 - **Charts come from [enchor.us](https://www.enchor.us/)**, a community archive of Guitar Hero,
   Rock Band and Clone Hero charts, searched and downloaded from inside the game.
-- **The music comes from your own device.** You pick an audio file, the game copies it into app
-  storage and plays the chart against it. No recordings are bundled, so nothing copyrighted is
-  distributed with the app.
+- **The music can come from your own device.** You pick an audio file, the game copies it into
+  app storage and plays the chart against it.
 
-That split is the whole point: the chart is the note data, the audio is yours. Drop in any track
-you own and the notes line up with it.
+A `.sng` chart is not just note data. It is a package, and roughly 97% of its bytes are audio:
+`song.opus` holds a full mixdown, alongside per-instrument stems. If you do not attach your own
+track, the game plays that audio. Nothing is bundled with the app or this repository — the audio
+arrives only when a player downloads a chart — but the game does play chart audio, so the
+distinction is worth being precise about.
+
+Attaching your own file is the cleaner path: it sidesteps the question of who has the rights to
+the recording inside the chart. See [Licensing](#licensing).
 
 ## Contents
 
@@ -47,7 +52,8 @@ Because it is signed with a debug key, it is meant for sideloading. Two conseque
   upgrade. Uninstall the old copy first.
 - It cannot go on Google Play as-is; that needs a release keystore.
 
-No music or charts are included in the APK. You supply both on first run.
+No music or charts are included in the APK. Charts are downloaded on first run, and each one
+arrives with its own audio. You can attach your own track instead.
 
 ## How it plays
 
@@ -349,13 +355,22 @@ including commercially, as long as the copyright notice travels with it.
 
 No music and no charts are bundled with this repository or the APK.
 
-- Charts are fetched on demand from enchor.us. They are community transcriptions of note data,
-  not audio.
-- Audio is read from the player's own device and copied into app-private storage. It never leaves
-  the device and is never redistributed.
+- Charts are fetched on demand from enchor.us, at the player's request. Nothing is shipped with
+  the app.
+- **A downloaded chart carries audio.** A `.sng` is a package, not a bare note file: `song.opus`
+  is a full mixdown and there are per-instrument stems as well. When the player has not attached
+  their own track, the game decodes and plays that audio.
+- Audio read from the player's own device is copied into app-private storage. It never leaves the
+  device and is never redistributed.
 - Game code, art and the app icon are part of this project, and are covered by the MIT licence.
 - The Opus decoder is [Concentus](https://github.com/lostromb/concentus) 1.1.6, a managed port of
   libopus, under its own BSD-3-Clause style licence.
+
+The MIT licence covers this project's own code. It does not cover charts or the audio inside
+them. Those come from enchor.us and are uploaded by third parties; whether a given recording may
+be used is between the player and whoever holds its rights. This project ships the player and the
+chart parser, not the recordings. If that distinction matters for how you intend to use the game,
+attach your own audio files.
 
 Concentus is vendored as a compiled assembly, and its licence requires the copyright notice and
 permission text to be reproduced wherever it is redistributed in binary form — which includes
@@ -365,5 +380,6 @@ with any build you publish.
 The Unity runtime embedded in a built APK is not covered by the MIT licence; it stays under the
 [Unity Terms of Service](https://unity.com/legal/terms-of-service).
 
-If you fork this to publish a build, keep that separation: ship the engine, let players supply
-their own audio.
+If you fork this to publish a build, keep that separation. Ship the engine and let players supply
+their own audio where they can, and be explicit in your own docs that a downloaded chart brings
+audio with it — that is the part you are not in a position to license.

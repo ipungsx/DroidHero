@@ -213,8 +213,12 @@ ignored rather than left to fail at play time.
 
 Droid Hero is released under the MIT licence; see [../LICENSE](../LICENSE).
 
-No music or charts are included. Charts are fetched on demand from enchor.us and audio is read
-from the player's device, which keeps the distributed game free of copyrighted recordings.
+No music or charts are included in this repository or in the APK. Charts are downloaded on
+demand from enchor.us, and each `.sng` carries its own audio (`song.opus` plus per-instrument
+stems); that audio plays when no local track is attached. Audio you pick yourself is copied into
+app storage and never leaves the device.
+
+The MIT licence covers this project's code, not the charts or the audio inside them.
 
 `Plugins/Concentus/Concentus.dll` is third-party code under a BSD-3-Clause style licence, which
 requires its notice to ship with every binary redistribution. The full text is in

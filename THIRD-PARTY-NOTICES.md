@@ -6,8 +6,9 @@ and permission text to be reproduced wherever the component is redistributed in 
 the full text is reproduced here.
 
 No music and no charts are included in this repository or in any APK built from it. Charts are
-downloaded on demand from [enchor.us](https://www.enchor.us/); audio is read from the player's own
-device. Neither is redistributed.
+downloaded on demand from [enchor.us](https://www.enchor.us/). A downloaded chart is not bare note
+data: it carries `song.opus` and per-instrument stems, and the game plays that audio unless the
+player attaches their own track. None of it is redistributed here or bundled into a build.
 
 ---
 
