@@ -211,5 +211,11 @@ ignored rather than left to fail at play time.
 
 ## Licence notes
 
+Droid Hero is released under the MIT licence; see [../LICENSE](../LICENSE).
+
 No music or charts are included. Charts are fetched on demand from enchor.us and audio is read
 from the player's device, which keeps the distributed game free of copyrighted recordings.
+
+`Plugins/Concentus/Concentus.dll` is third-party code under a BSD-3-Clause style licence, which
+requires its notice to ship with every binary redistribution. The full text is in
+[../THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md).

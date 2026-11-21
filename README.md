@@ -344,15 +344,26 @@ More build and packaging detail lives in [AGENTS.md](AGENTS.md) and
 
 ## Licensing
 
+Droid Hero is released under the [MIT licence](LICENSE). You may use, modify and redistribute it,
+including commercially, as long as the copyright notice travels with it.
+
 No music and no charts are bundled with this repository or the APK.
 
 - Charts are fetched on demand from enchor.us. They are community transcriptions of note data,
   not audio.
 - Audio is read from the player's own device and copied into app-private storage. It never leaves
   the device and is never redistributed.
-- Game code, art and the app icon are part of this project.
-- The Opus decoder is [Concentus](https://github.com/lostromb/concentus), a managed port of
-  libopus, under its own licence.
+- Game code, art and the app icon are part of this project, and are covered by the MIT licence.
+- The Opus decoder is [Concentus](https://github.com/lostromb/concentus) 1.1.6, a managed port of
+  libopus, under its own BSD-3-Clause style licence.
+
+Concentus is vendored as a compiled assembly, and its licence requires the copyright notice and
+permission text to be reproduced wherever it is redistributed in binary form — which includes
+every APK. The full text is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Keep that file
+with any build you publish.
+
+The Unity runtime embedded in a built APK is not covered by the MIT licence; it stays under the
+[Unity Terms of Service](https://unity.com/legal/terms-of-service).
 
 If you fork this to publish a build, keep that separation: ship the engine, let players supply
 their own audio.
