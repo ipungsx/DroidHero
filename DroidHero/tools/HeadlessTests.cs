@@ -64,6 +64,7 @@ namespace DroidHero.Tests
             TestStrumOrderIndependence();
             TestSustainTail();
             TestFinalizeIsRepeatable();
+            TestLaneHitTesting();
 
             Console.WriteLine();
             Console.WriteLine(_failures == 0
@@ -152,6 +153,48 @@ namespace DroidHero.Tests
             // The calibration offset must still shift timing, which is why the second pass exists.
             Check(System.Math.Abs(chart.Notes[0].Time - 0.045f) < 0.001f,
                   "a second finalize applies the calibration offset");
+        }
+
+        /// <summary>
+        /// The highway narrows toward the horizon, so hit-testing has to answer two different
+        /// questions: which lane a point is over, and whether a finger has left the instrument
+        /// sideways. Swiping off the side has to report outside, while sliding up past the
+        /// horizon has to stay inside, or a finger would drop its fret mid-run.
+        /// </summary>
+        static void TestLaneHitTesting()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- lane hit testing ---");
+
+            var layout = new HighwayLayout();
+
+            float centre = layout.LaneCenterX(2);
+            Check(layout.LaneAtXAt(centre, layout.HitLineY) == 2, "the lane centre resolves to its lane");
+
+            float leftEdge = layout.HighwayLeftXAt(layout.HitLineY);
+            float rightEdge = layout.HighwayRightXAt(layout.HitLineY);
+
+            Check(layout.LaneAtXAt(leftEdge - 0.5f, layout.HitLineY) == -1,
+                  "a point left of the highway is no lane");
+            Check(layout.LaneAtXAt(rightEdge + 0.5f, layout.HitLineY) == -1,
+                  "a point right of the highway is no lane");
+            Check(layout.IsOutsideHorizontally(leftEdge - 0.5f, layout.HitLineY),
+                  "a point left of the highway reads as outside");
+            Check(layout.IsOutsideHorizontally(rightEdge + 0.5f, layout.HitLineY),
+                  "a point right of the highway reads as outside");
+
+            // Sliding up past the horizon keeps the fret: the highway is narrower there, so the
+            // point has to be tested against that height's own edges, not the strike line's.
+            Check(!layout.IsOutsideHorizontally(layout.LaneCenterXAt(0, layout.TopY), layout.TopY),
+                  "a point above the strike line but on the highway is not outside");
+            Check(layout.LaneAtXAt(layout.HighwayLeftXAt(layout.TopY) - 0.1f, layout.TopY) == -1,
+                  "the highway narrows toward the horizon");
+
+            // The strum strip sits directly below the fret buttons.
+            float stripTop = layout.HitLineY - layout.NoteHeight;
+            Check(layout.IsInStrumStrip(stripTop - 0.2f, 1.5f), "just below the frets is the strum strip");
+            Check(!layout.IsInStrumStrip(stripTop + 0.2f, 1.5f), "the fret row itself is not the strum strip");
+            Check(!layout.IsInStrumStrip(stripTop - 2f, 1.5f), "below the strip is not the strum strip");
         }
 
         static void TestSngContainer(string path)

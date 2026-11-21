@@ -175,12 +175,26 @@ namespace DroidHero.Gameplay
         /// </summary>
         public int LaneAtXAt(float x, float y)
         {
+            if (IsOutsideHorizontally(x, y)) return -1;
+
             float left = HighwayLeftXAt(y);
             float width = LaneWidthAt(y);
-            if (x < left || x > left + width * LaneInfo.Count) return -1;
-
             int lane = Mathf.FloorToInt((x - left) / width);
             return Mathf.Clamp(lane, 0, LaneInfo.Count - 1);
         }
+
+        /// <summary>
+        /// True when the point sits past the highway's left or right edge.
+        ///
+        /// Vertical exits are deliberately not reported here: sliding up past the horizon or down
+        /// toward the strum strip should keep the finger's fret held, while sliding off the side
+        /// means the finger has left the instrument and the fret has to be released.
+        /// </summary>
+        public bool IsOutsideHorizontally(float x, float y) =>
+            x < HighwayLeftXAt(y) || x > HighwayRightXAt(y);
+
+        /// <summary>True when the point falls inside the strum strip below the fret buttons.</summary>
+        public bool IsInStrumStrip(float y, float stripHeight) =>
+            y < HitLineY - NoteHeight && y > HitLineY - NoteHeight - stripHeight;
     }
 }

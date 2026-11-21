@@ -31,6 +31,13 @@ namespace DroidHero.Gameplay
         const float FretSpringStiffness = 420f;
         const float FretSpringDamping = 21f;
 
+        /// <summary>
+        /// Largest step the press spring may take. An explicit Euler step on a spring of
+        /// stiffness k is stable only while delta &lt; 2/sqrt(k); at 420 that is 0.098 s, so a
+        /// single slow frame would otherwise diverge and freeze the cap at a huge scale.
+        /// </summary>
+        const float MaxSpringStep = 0.02f;
+
         public HighwayLayout Layout = new HighwayLayout();
 
         readonly List<ActiveNote> _visible = new List<ActiveNote>(256);
@@ -571,6 +578,13 @@ namespace DroidHero.Gameplay
 
             if (heldLanes == null) return;
 
+            // The press spring is integrated explicitly, and at this stiffness an explicit step
+            // diverges once a frame runs past roughly 2/sqrt(k) ~ 0.098 s. One hitch on a phone
+            // is enough, and the resulting blow-up left the cap frozen at an absurd scale, which
+            // reads as the fret hanging. Clamping the step keeps the spring bounded; the song
+            // clock is unaffected because it comes from the audio position, not from this.
+            float springDelta = Mathf.Min(delta, MaxSpringStep);
+
             for (int lane = 0; lane < _fretButtons.Length && lane < heldLanes.Count; lane++)
             {
                 if (_fretButtons[lane] == null) continue;
@@ -583,8 +597,14 @@ namespace DroidHero.Gameplay
                 float target = held ? FretPressedScale : FretRestScale;
                 float offset = _fretPressScale[lane] - target;
                 _fretPressVelocity[lane] += (-FretSpringStiffness * offset -
-                                             FretSpringDamping * _fretPressVelocity[lane]) * delta;
-                _fretPressScale[lane] += _fretPressVelocity[lane] * delta;
+                                             FretSpringDamping * _fretPressVelocity[lane]) * springDelta;
+                _fretPressScale[lane] += _fretPressVelocity[lane] * springDelta;
+
+                // Belt and braces: even a clamped step can overshoot on a very slow frame, and a
+                // cap stuck outside the rest/pressed range never returns to either.
+                _fretPressScale[lane] = Mathf.Clamp(_fretPressScale[lane],
+                                                    FretRestScale - 0.15f,
+                                                    FretPressedScale + 0.15f);
 
                 float press = Mathf.InverseLerp(FretRestScale, FretPressedScale, _fretPressScale[lane]);
                 press = Mathf.Clamp01(press);
