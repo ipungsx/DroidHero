@@ -142,12 +142,10 @@ pass in: SNG parsing, all difficulties, a perfect run, an idle run, star power, 
 audio format detection, highway geometry, the local-audio link store, the calibration offset, and a
 full Opus decode whose output is compared sample-by-sample against the streaming path.
 
-Two compile checks keep the Unity-facing code honest:
-
-```bash
-./compile_check.sh          # runtime scripts against real UnityEngine assemblies
-./compile_check_editor.sh   # Editor build script against UnityEditor assemblies
-```
+`run-tests.sh` deliberately skips the scripts that touch `UnityEngine` — anything that derives
+from `MonoBehaviour` or draws through IMGUI. A new UI or input file that pulls in `UnityEngine`
+will break the harness with `CS0246`; add it to the exclusion list in `tools/run-tests.sh`, and
+cover its logic through a plain C# helper instead.
 
 ## Layout
 
