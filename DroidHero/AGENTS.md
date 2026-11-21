@@ -199,6 +199,28 @@ call, because the calibration pass is not optional. When adding one, either stor
 authored value separately or guard it the way `_durationsResolved` does. `TestFinalizeIsRepeatable`
 in `tools/HeadlessTests.cs` covers this.
 
+## Touch bookkeeping has to release, not just record
+
+`TouchInputController` keeps `_fingerLane` and `_fingerIsStrum` keyed by finger id, and a lane
+stays held as long as any entry points at it. Two paths used to record a finger without a
+matching release:
+
+- A finger Android stopped reporting never fired `Ended`. The stale sweep compared against the
+  live touch list instead of the tracked map, so a finger that vanished between frames stayed
+  held forever and the next note in that lane auto-landed. That reads as a fret stuck on.
+- A finger dragged off the side of the highway hit the "no lane" branch and was ignored, so its
+  old lane stayed held. Sweeping back and forth across the edge left a phantom hold each time.
+
+`MoveTouch` now stores `OutsideLane` (a sentinel, never a real lane) when a point resolves to no
+lane, and every consumer of `_fingerLane` has to test for it before touching `_held[]`. A touch
+that starts beside the highway is tracked the same way, so it can slide into a lane; dropping it
+at `BeginTouch` meant those swipes never pressed a fret at all.
+
+The press spring in `HighwayRenderer.UpdateLaneFeedback` integrates an explicit step, so it has
+to clamp the delta. One long frame (chart decode, GC pause) otherwise threw the spring far past
+its rest position and it took several frames to settle, which is the lag players see on fast
+play. `MaxSpringStep` is that clamp.
+
 ## Packaging by hand
 
 The Gradle template under `Library/Bee/Android/Prj/IL2CPP/Gradle/` is generated once and
