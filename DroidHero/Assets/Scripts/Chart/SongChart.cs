@@ -75,6 +75,13 @@ namespace DroidHero.Chart
 
         float _songLength = -1f;
 
+        /// <summary>
+        /// Whether <see cref="ChartNote.Duration"/> has been converted from ticks to seconds.
+        /// <see cref="FinalizeChart"/> is called by both the parsers and SongLibrary, so without
+        /// this the second pass converts the durations again and zeroes every sustain.
+        /// </summary>
+        bool _durationsResolved;
+
         /// <summary>Length of the charted notes in seconds; cached because the HUD asks each frame.</summary>
         public float SongLength
         {
@@ -195,14 +202,24 @@ namespace DroidHero.Chart
             {
                 ChartNote n = Notes[i];
                 n.Time = TickToSeconds(n.Tick) + Offset + audioOffsetSeconds;
-                n.Duration = TicksToSecondsDuration(n.Tick, (int)n.Duration);
 
-                // MIDI charts close a non-sustained note one tick later; treat anything
-                // shorter than a strum as a plain note rather than a one-frame sustain.
-                if (n.Duration < MinSustainSeconds) n.Duration = 0f;
+                // Duration is authored in ticks, but this method runs twice: once inside the
+                // parser and again in SongLibrary to fold in the player's calibration offset.
+                // Converting an already-converted duration treats seconds as ticks, which
+                // shrinks every sustain to nothing. Convert once, then only re-apply the shift.
+                if (!_durationsResolved)
+                {
+                    n.Duration = TicksToSecondsDuration(n.Tick, (int)n.Duration);
+
+                    // MIDI charts close a non-sustained note one tick later; treat anything
+                    // shorter than a strum as a plain note rather than a one-frame sustain.
+                    if (n.Duration < MinSustainSeconds) n.Duration = 0f;
+                }
 
                 Notes[i] = n;
             }
+
+            _durationsResolved = true;
 
             Notes.Sort((a, b) =>
             {

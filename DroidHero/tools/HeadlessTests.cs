@@ -63,6 +63,7 @@ namespace DroidHero.Tests
             TestSingleNoteStillNeedsStrum();
             TestStrumOrderIndependence();
             TestSustainTail();
+            TestFinalizeIsRepeatable();
 
             Console.WriteLine();
             Console.WriteLine(_failures == 0
@@ -102,6 +103,55 @@ namespace DroidHero.Tests
 
             HighwayLayout.TailQuad tiny = layout.SustainTail(headY, headY + 0.005f, 1);
             Check(!tiny.Visible, "a note too short to read draws no tail");
+        }
+
+        /// <summary>
+        /// SongLibrary re-runs FinalizeChart to fold in the player's calibration offset. That
+        /// second pass used to convert the already-converted durations a second time, which
+        /// treated seconds as ticks and collapsed every sustain to zero, so no tail ever drew.
+        /// </summary>
+        static void TestFinalizeIsRepeatable()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- repeat finalize ---");
+
+            var chart = new SongChart { Resolution = 192 };
+            chart.AddTempo(0, 120f);
+            chart.AddNote(0, 0, 0, false, 0);
+            chart.AddNote(192, 1, 384, false, 0);
+            chart.AddNote(768, 2, 768, false, 0);
+
+            chart.FinalizeChart();
+
+            float firstDuration = 0f;
+            int sustains = 0;
+            for (int i = 0; i < chart.Notes.Count; i++)
+            {
+                if (chart.Notes[i].IsSustain) sustains++;
+                if (chart.Notes[i].Duration > firstDuration) firstDuration = chart.Notes[i].Duration;
+            }
+
+            Check(sustains == 2, "the chart has two sustains (" + sustains + ")");
+            Check(firstDuration > 1f, "a sustain survives the first finalize");
+
+            chart.FinalizeChart(0.045f);
+
+            int afterSustains = 0;
+            float afterDuration = 0f;
+            for (int i = 0; i < chart.Notes.Count; i++)
+            {
+                if (chart.Notes[i].IsSustain) afterSustains++;
+                if (chart.Notes[i].Duration > afterDuration) afterDuration = chart.Notes[i].Duration;
+            }
+
+            Check(afterSustains == sustains,
+                  "a second finalize keeps every sustain (" + afterSustains + " of " + sustains + ")");
+            Check(System.Math.Abs(afterDuration - firstDuration) < 0.001f,
+                  "a second finalize keeps sustain length (" + afterDuration.ToString("F3") + "s)");
+
+            // The calibration offset must still shift timing, which is why the second pass exists.
+            Check(System.Math.Abs(chart.Notes[0].Time - 0.045f) < 0.001f,
+                  "a second finalize applies the calibration offset");
         }
 
         static void TestSngContainer(string path)

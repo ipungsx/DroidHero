@@ -184,6 +184,21 @@ Verify by symbol, not by exit code. The stripped `.so` keeps no local symbols, s
 strings -a .../Managed/Metadata/global-metadata.dat | grep -c AutoStrumChords
 ```
 
+## FinalizeChart runs twice, so duration conversion must be one-shot
+
+`ChartFileParser` and `MidiParser` each call `FinalizeChart()` at the end of parsing, and
+`SongLibrary.LoadSong` calls it again to fold in the player's calibration offset. The first
+pass converts `ChartNote.Duration` from ticks to seconds; the second pass then read that
+value as if it were still ticks and converted it again. At 120 BPM and 192 resolution one
+second became ~0.0026 s, which is under `MinSustainSeconds`, so **every sustain was zeroed**
+and no note ever drew a tail. `SongChart._durationsResolved` now gates the conversion so
+repeat passes only re-apply the timing shift.
+
+The lesson generalises: any field `FinalizeChart` rewrites in place has to survive a second
+call, because the calibration pass is not optional. When adding one, either store the
+authored value separately or guard it the way `_durationsResolved` does. `TestFinalizeIsRepeatable`
+in `tools/HeadlessTests.cs` covers this.
+
 ## Packaging by hand
 
 The Gradle template under `Library/Bee/Android/Prj/IL2CPP/Gradle/` is generated once and
