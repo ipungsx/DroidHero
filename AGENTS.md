@@ -106,6 +106,37 @@ otherwise break the harness with `CS0246 MonoBehaviour`.
 
 ## Gotchas
 
+- `stripEngineCode: 1` plus a stale `UnityICallRegistration.o` is the root of the
+  `MissingMethodException` class of crash. The generator input
+  (`il2cppOutput/UnityICallRegistration.cpp`) and `ManagedStripped/icallsummary.txt` do not
+  exist in a fresh checkout, so the `.o` can be older than the managed code and miss icalls the
+  player build then resolves. Regenerate both, then relink `libunity.so` for **each** ABI before
+  packaging:
+  ```bash
+  mono /workspace/unity/Editor/Data/Tools/InternalCallRegistrationWriter/InternalCallRegistrationWriter.exe \
+    -output=Library/Bee/artifacts/Android/il2cppOutput/UnityICallRegistration.cpp \
+    -summary=Library/Bee/artifacts/Android/ManagedStripped/icallsummary.txt \
+    -assembly="$(ls Library/Bee/artifacts/Android/ManagedStripped/UnityEngine.*Module.dll | paste -sd';')"
+  ```
+  The assembly list must **not** end in `;` or the writer dies with
+  `ArgumentNullOrEmptyException: fileName`. A regenerated table registers ~1182 icalls; the
+  stale one shipped 631.
+- Verify icall coverage by matching names, never by `nm -D` on `libunity.so` (it is stripped and
+  exports only through `libunity.map`):
+  ```python
+  need = set(re.findall(rb'UnityEngine\.\w+::\w+_Injected', open('libil2cpp.so','rb').read()))
+  have = set(re.findall(rb'UnityEngine\.\w+::\w+_Injected', open('libunity.so','rb').read()))
+  assert not need - have
+  ```
+- `Library/Bee/artifacts/1300b0aE.dag/Assembly-CSharp.rsp` is the **editor** response file and
+  carries `UNITY_EDITOR`. Compiling the player with it pulls editor-only code
+  (`LocalAudioPicker.PickDesktop`) into `Assembly-CSharp.dll` and UnityLinker then fails with
+  `IL1005 ... Failed to resolve assembly: 'UnityEditor.CoreModule'`. Use `1300b0aP.dag`.
+- Never use `GUI.TextField`, `GUI.PasswordField` or `TouchScreenKeyboard` on a device build.
+  All three reach the Android input-method service, and that path takes the whole screen down
+  with an exception thrown from `OnGUI`; the player sees a frozen or black screen instead of a
+  field. `DroidHeroApp.DrawSearchKeyboard` draws the letters as ordinary `GUI.Button`s for this
+  reason. Stick to `Button`, `Label`, `DrawTexture` and `BeginScrollView` in any new UI.
 - `ProjectSettings/ProjectVersion.txt` must carry the real revision (`b028303d8e7d`), not zeros.
 - Charts embed Ogg Opus, which Unity cannot decode; `Assets/Plugins/Concentus/Concentus.dll`
   plus the streaming clip factory handle it. A full song is ~100 MB of float samples, so the

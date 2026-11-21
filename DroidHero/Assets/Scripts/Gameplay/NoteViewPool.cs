@@ -45,7 +45,7 @@ namespace DroidHero.Gameplay
             var root = new GameObject("NoteView");
             root.transform.SetParent(_parent, false);
 
-            var sustain = Child(root.transform, "Sustain", ProceduralSprites.VerticalFade, _sortingOrder - 2);
+            var sustain = Child(root.transform, "Sustain", ProceduralSprites.SustainTail, _sortingOrder - 2);
             var halo = Child(root.transform, "Halo", ProceduralSprites.Glow, _sortingOrder - 1);
             var rim = Child(root.transform, "Rim", ProceduralSprites.Circle, _sortingOrder);
             var body = Child(root.transform, "Body", ProceduralSprites.Circle, _sortingOrder + 1);

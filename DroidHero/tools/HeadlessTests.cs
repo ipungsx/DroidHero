@@ -57,7 +57,14 @@ namespace DroidHero.Tests
             TestLeaderboardClear();
             TestSongDifficultyStore();
             TestEnchorSearchRequest();
+            TestSearchTextEditor();
             TestOverdriveMilestone();
+            TestChordInput();
+            TestSingleNoteStillNeedsStrum();
+            TestStrumOrderIndependence();
+            TestSustainTail();
+            TestFinalizeIsRepeatable();
+            TestLaneHitTesting();
 
             Console.WriteLine();
             Console.WriteLine(_failures == 0
@@ -65,6 +72,129 @@ namespace DroidHero.Tests
                 : _failures + " FAILURE(S) of " + _checks + " checks");
 
             return _failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// A long note must draw a tail that is actually visible: tall enough to read as a bar
+        /// and as wide as a good fraction of its lane, not the hairline the old sprite produced.
+        /// </summary>
+        static void TestSustainTail()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- sustain tail ---");
+
+            var layout = new HighwayLayout();
+            float headY = layout.HitLineY;
+
+            // Two seconds of sustain at the strike line, and one whose end is past the horizon.
+            float endY = layout.TimeToY(2f, 0f);
+            HighwayLayout.TailQuad tail = layout.SustainTail(headY, endY, 2);
+
+            Check(tail.Visible, "a sustained note draws a tail");
+            Check(tail.Height > 0.5f, "the tail is tall (" + tail.Height.ToString("F2") + " units)");
+            Check(tail.Width > layout.LaneWidth * 0.2f,
+                  "the tail is lane-wide (" + tail.Width.ToString("F2") + " units)");
+            Check(System.Math.Abs(tail.CenterY - (headY + tail.Height * 0.5f)) < 0.001f,
+                  "the tail starts at the note head");
+
+            HighwayLayout.TailQuad clipped = layout.SustainTail(headY, layout.TopY + 40f, 0);
+            Check(clipped.Visible, "a long tail still draws");
+            Check(clipped.CenterY + clipped.Height * 0.5f <= layout.TopY + 0.001f,
+                  "a long tail stops at the horizon instead of drawing into the sky");
+
+            HighwayLayout.TailQuad tiny = layout.SustainTail(headY, headY + 0.005f, 1);
+            Check(!tiny.Visible, "a note too short to read draws no tail");
+        }
+
+        /// <summary>
+        /// SongLibrary re-runs FinalizeChart to fold in the player's calibration offset. That
+        /// second pass used to convert the already-converted durations a second time, which
+        /// treated seconds as ticks and collapsed every sustain to zero, so no tail ever drew.
+        /// </summary>
+        static void TestFinalizeIsRepeatable()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- repeat finalize ---");
+
+            var chart = new SongChart { Resolution = 192 };
+            chart.AddTempo(0, 120f);
+            chart.AddNote(0, 0, 0, false, 0);
+            chart.AddNote(192, 1, 384, false, 0);
+            chart.AddNote(768, 2, 768, false, 0);
+
+            chart.FinalizeChart();
+
+            float firstDuration = 0f;
+            int sustains = 0;
+            for (int i = 0; i < chart.Notes.Count; i++)
+            {
+                if (chart.Notes[i].IsSustain) sustains++;
+                if (chart.Notes[i].Duration > firstDuration) firstDuration = chart.Notes[i].Duration;
+            }
+
+            Check(sustains == 2, "the chart has two sustains (" + sustains + ")");
+            Check(firstDuration > 1f, "a sustain survives the first finalize");
+
+            chart.FinalizeChart(0.045f);
+
+            int afterSustains = 0;
+            float afterDuration = 0f;
+            for (int i = 0; i < chart.Notes.Count; i++)
+            {
+                if (chart.Notes[i].IsSustain) afterSustains++;
+                if (chart.Notes[i].Duration > afterDuration) afterDuration = chart.Notes[i].Duration;
+            }
+
+            Check(afterSustains == sustains,
+                  "a second finalize keeps every sustain (" + afterSustains + " of " + sustains + ")");
+            Check(System.Math.Abs(afterDuration - firstDuration) < 0.001f,
+                  "a second finalize keeps sustain length (" + afterDuration.ToString("F3") + "s)");
+
+            // The calibration offset must still shift timing, which is why the second pass exists.
+            Check(System.Math.Abs(chart.Notes[0].Time - 0.045f) < 0.001f,
+                  "a second finalize applies the calibration offset");
+        }
+
+        /// <summary>
+        /// The highway narrows toward the horizon, so hit-testing has to answer two different
+        /// questions: which lane a point is over, and whether a finger has left the instrument
+        /// sideways. Swiping off the side has to report outside, while sliding up past the
+        /// horizon has to stay inside, or a finger would drop its fret mid-run.
+        /// </summary>
+        static void TestLaneHitTesting()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- lane hit testing ---");
+
+            var layout = new HighwayLayout();
+
+            float centre = layout.LaneCenterX(2);
+            Check(layout.LaneAtXAt(centre, layout.HitLineY) == 2, "the lane centre resolves to its lane");
+
+            float leftEdge = layout.HighwayLeftXAt(layout.HitLineY);
+            float rightEdge = layout.HighwayRightXAt(layout.HitLineY);
+
+            Check(layout.LaneAtXAt(leftEdge - 0.5f, layout.HitLineY) == -1,
+                  "a point left of the highway is no lane");
+            Check(layout.LaneAtXAt(rightEdge + 0.5f, layout.HitLineY) == -1,
+                  "a point right of the highway is no lane");
+            Check(layout.IsOutsideHorizontally(leftEdge - 0.5f, layout.HitLineY),
+                  "a point left of the highway reads as outside");
+            Check(layout.IsOutsideHorizontally(rightEdge + 0.5f, layout.HitLineY),
+                  "a point right of the highway reads as outside");
+
+            // Sliding up past the horizon keeps the fret: the highway is narrower there, so the
+            // point has to be tested against that height's own edges, not the strike line's.
+            Check(!layout.IsOutsideHorizontally(layout.LaneCenterXAt(0, layout.TopY), layout.TopY),
+                  "a point above the strike line but on the highway is not outside");
+            Check(layout.LaneAtXAt(layout.HighwayLeftXAt(layout.TopY) - 0.1f, layout.TopY) == -1,
+                  "the highway narrows toward the horizon");
+
+            // The strum strip sits directly below the fret buttons.
+            float stripTop = layout.HitLineY - layout.NoteHeight;
+            Check(layout.IsInStrumStrip(stripTop - 0.2f, 1.5f), "just below the frets is the strum strip");
+            Check(!layout.IsInStrumStrip(stripTop + 0.2f, 1.5f), "the fret row itself is not the strum strip");
+            Check(!layout.IsInStrumStrip(stripTop - 2f, 1.5f), "below the strip is not the strum strip");
         }
 
         static void TestSngContainer(string path)
@@ -1037,9 +1167,169 @@ namespace DroidHero.Tests
         }
 
         /// <summary>
-        /// The score milestone reward. It has to fire on score, fire once per threshold, expire
-        /// on its own, and double the multiplier only while it is running.
+        /// The editable search box. It replaces IMGUI's text field on the enchor screen, so the
+        /// editing rules have to hold without a keyboard or a GUI pass to exercise them.
         /// </summary>
+        static void TestSearchTextEditor()
+        {
+            Console.WriteLine();
+            Console.WriteLine("Search text editor");
+
+            var editor = new SearchTextEditor();
+            Check(editor.IsEmpty, "a new editor is empty");
+
+            editor.Type("metallica");
+            Check(editor.Text == "metallica", "typing appends (" + editor.Text + ")");
+            Check(!editor.IsEmpty, "a typed editor is not empty");
+
+            editor.Backspace();
+            Check(editor.Text == "metallic", "backspace removes the last character (" + editor.Text + ")");
+
+            editor.Type("a!");
+            Check(editor.Text == "metallica!", "typing resumes after a backspace (" + editor.Text + ")");
+
+            // The platform keyboard reports the whole value at once, so Set has to replace it
+            // rather than append to whatever the field held before.
+            editor.Set("dragonforce");
+            Check(editor.Text == "dragonforce", "Set replaces the whole value (" + editor.Text + ")");
+
+            editor.Set("");
+            Check(editor.IsEmpty, "Set to empty clears the field");
+
+            editor.Backspace();
+            Check(editor.IsEmpty, "backspace on an empty field is harmless");
+
+            editor.Clear();
+            Check(editor.IsEmpty, "clear empties the field");
+
+            // Control characters arrive from keyboards as Enter and Delete; they must not end up
+            // in the query, which is sent as JSON to the search endpoint.
+            editor.Type("a\tb\nc");
+            Check(editor.Text == "abc", "control characters are dropped (" + editor.Text + ")");
+
+            editor.Type("x\by");
+            Check(editor.Text == "abcy", "a backspace character deletes inside typed text (" + editor.Text + ")");
+
+            editor.Clear();
+            editor.Type(new string('z', SearchTextEditor.MaxLength + 20));
+            Check(editor.Text.Length == SearchTextEditor.MaxLength,
+                  "the field stops at " + SearchTextEditor.MaxLength + " characters (" + editor.Text.Length + ")");
+
+            // A long paste must not discard what the player already typed.
+            editor.Clear();
+            editor.Type("abc");
+            editor.Type(new string('q', SearchTextEditor.MaxLength));
+            Check(editor.Text.StartsWith("abc"), "a full field keeps the existing text");
+            Check(editor.Text.Length == SearchTextEditor.MaxLength, "a full field stays at the limit");
+
+            editor.Type(null);
+            Check(editor.Text.Length == SearchTextEditor.MaxLength, "typing null changes nothing");
+        }
+
+        /// <summary>
+        /// A chord must land from the frets alone: no third finger on the strum strip.
+        ///
+        /// This drives the tracker the way the touch layer does. Fingers land a few frames apart,
+        /// then the per-frame pass sees every lane of the chord held and resolves it.
+        /// </summary>
+        static void TestChordInput()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- chord input ---");
+
+            SongChart chart = ChordChart();
+            var session = new GameSession(chart);
+
+            var held = new bool[LaneInfo.Count];
+
+            // Fingers land a few frames apart, as they do on a real screen.
+            session.Update(0.98f, 1f / 60f);
+            session.PressFret(0, false);
+            held[0] = true;
+            int early = session.AutoStrumChords(held);
+            Check(early == 0, "a half-held chord does not resolve early (" + early + ")");
+
+            session.Update(1.00f, 1f / 60f);
+            session.PressFret(1, false);
+            held[1] = true;
+            int hits = session.AutoStrumChords(held);
+
+            Check(hits == 2, "holding both frets lands the chord (hit " + hits + "/2)");
+            Check(session.Score.NotesHit == 2,
+                  "chord counts two hits (" + session.Score.NotesHit + ")");
+            Check(session.Score.NotesMissed == 0,
+                  "chord misses nothing (" + session.Score.NotesMissed + ")");
+            Check(session.Score.MaxCombo == 2,
+                  "chord keeps combo through both notes (" + session.Score.MaxCombo + ")");
+
+            // A chord must not resolve twice: the second pass over the same held lanes is a no-op.
+            int again = session.AutoStrumChords(held);
+            Check(again == 0, "a landed chord does not resolve twice (" + again + ")");
+        }
+
+        /// <summary>
+        /// The chord shortcut must not leak into single notes: those still need the strum, or the
+        /// whole chart would play itself.
+        /// </summary>
+        static void TestSingleNoteStillNeedsStrum()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- single note keeps its strum ---");
+
+            var chart = new SongChart { Name = "Single", Resolution = 192 };
+            chart.AddTempo(0, 120f);
+            chart.AddNote(384, 2, 0, false, 0);
+            chart.FinalizeChart();
+
+            var session = new GameSession(chart);
+            session.Update(1.00f, 1f / 60f);
+
+            var held = new bool[LaneInfo.Count];
+            held[2] = true;
+            session.PressFret(2, false);
+            int auto = session.AutoStrumChords(held);
+
+            Check(auto == 0, "a single note is not auto-strummed (" + auto + ")");
+            Check(session.Score.NotesHit == 0, "the single note is still pending");
+
+            int strummed = session.Strum(held);
+            Check(strummed == 1, "the strum lands the single note (" + strummed + ")");
+            Check(session.Score.NotesHit == 1, "the single note counts one hit");
+        }
+
+        /// <summary>
+        /// A fret pressed on the same frame as the strum has to count. Players tap and strum
+        /// together, and the held-lane view the strum reads is rebuilt after the touches.
+        /// </summary>
+        static void TestStrumOrderIndependence()
+        {
+            Console.WriteLine();
+            Console.WriteLine("--- press and strum on one frame ---");
+
+            SongChart chart = ChordChart();
+            var session = new GameSession(chart);
+            session.Update(1.00f, 1f / 60f);
+
+            session.PressFret(0, false);
+            var held = new bool[LaneInfo.Count];
+            held[0] = true;
+            held[1] = true;
+            int hits = session.Strum(held);
+
+            Check(hits >= 1, "a same-frame press and strum lands its own note (" + hits + ")");
+        }
+
+        /// <summary>A minimal chart holding one two-lane chord at t=1s.</summary>
+        static SongChart ChordChart()
+        {
+            var chart = new SongChart { Name = "Chord", Resolution = 192 };
+            chart.AddTempo(0, 120f);
+            chart.AddNote(384, 0, 0, false, 0);
+            chart.AddNote(384, 1, 0, false, 0);
+            chart.FinalizeChart();
+            return chart;
+        }
+
         static void TestOverdriveMilestone()
         {
             Console.WriteLine();

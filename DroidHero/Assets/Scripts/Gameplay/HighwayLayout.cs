@@ -60,6 +60,38 @@ namespace DroidHero.Gameplay
         /// <summary>Half-width of a lane at an arbitrary height, used to size note heads.</summary>
         public float LaneWidthAt(float y) => LaneWidth * WidthScaleAt(y);
 
+        /// <summary>
+        /// Geometry of a sustain tail: where its quad sits and how big it is, in world units.
+        ///
+        /// The tail runs from the note head up to the note's end time. It is clipped at the
+        /// horizon, so a long note never draws into the sky above the stage. Width is taken at
+        /// the quad's midpoint because a single sprite cannot taper along its length.
+        /// </summary>
+        public struct TailQuad
+        {
+            public bool Visible;
+            public float CenterX;
+            public float CenterY;
+            public float Width;
+            public float Height;
+        }
+
+        public TailQuad SustainTail(float headY, float endY, int lane)
+        {
+            var quad = new TailQuad();
+            float top = Mathf.Min(endY, TopY);
+            float height = top - headY;
+            if (height <= 0.02f) return quad;
+
+            float midY = headY + height * 0.5f;
+            quad.Visible = true;
+            quad.CenterX = LaneCenterXAt(lane, midY);
+            quad.CenterY = midY;
+            quad.Width = LaneWidthAt(midY) * 0.62f;
+            quad.Height = height;
+            return quad;
+        }
+
         public float HighwayLeftX => LaneCenterX(0) - LaneWidth * 0.5f;
         public float HighwayRightX => LaneCenterX(LaneInfo.Count - 1) + LaneWidth * 0.5f;
 
@@ -143,12 +175,26 @@ namespace DroidHero.Gameplay
         /// </summary>
         public int LaneAtXAt(float x, float y)
         {
+            if (IsOutsideHorizontally(x, y)) return -1;
+
             float left = HighwayLeftXAt(y);
             float width = LaneWidthAt(y);
-            if (x < left || x > left + width * LaneInfo.Count) return -1;
-
             int lane = Mathf.FloorToInt((x - left) / width);
             return Mathf.Clamp(lane, 0, LaneInfo.Count - 1);
         }
+
+        /// <summary>
+        /// True when the point sits past the highway's left or right edge.
+        ///
+        /// Vertical exits are deliberately not reported here: sliding up past the horizon or down
+        /// toward the strum strip should keep the finger's fret held, while sliding off the side
+        /// means the finger has left the instrument and the fret has to be released.
+        /// </summary>
+        public bool IsOutsideHorizontally(float x, float y) =>
+            x < HighwayLeftXAt(y) || x > HighwayRightXAt(y);
+
+        /// <summary>True when the point falls inside the strum strip below the fret buttons.</summary>
+        public bool IsInStrumStrip(float y, float stripHeight) =>
+            y < HitLineY - NoteHeight && y > HitLineY - NoteHeight - stripHeight;
     }
 }

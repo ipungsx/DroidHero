@@ -152,6 +152,75 @@ not just the ones whose generated source differs. The full set is 252 nodes and 
 minutes with `ThreadPoolExecutor(max_workers=8)`. The build is deterministic: a full rebuild
 and an incremental one produce byte-identical `libil2cpp.so`.
 
+`tools/relink_il2cpp.py --dll <Assembly-CSharp.dll>` replays all five stages from the DAG and
+is the supported way to do this. Three things it guards against, each of which produced an
+APK that built and installed but still ran the previous release:
+
+**The DLL's file name becomes the assembly name.** Compiling to `DroidHero.dll` makes
+UnityLinker write `DroidHero.dll` into `ManagedStripped/` and leave the stale
+`Assembly-CSharp.dll` beside it, and il2cpp then converts the stale one. Compile to
+`Assembly-CSharp.dll`. The script refuses any other name and checks that the stripped DLL is
+newer than its input.
+
+**il2cpp can add parts that the DAG never names.** A C# change grew `Assembly-CSharp` from
+three parts to four, so `Assembly-CSharp__3.cpp` had no compile node. The link then failed on
+undefined symbols, because the recorded link lists every object explicitly. Compile the
+generated `.cpp` files, not the recorded list, and append the extra objects to the link.
+
+**The output directory holds more than the generated C++.** `bdwgc`, `libil2cpp` helpers and
+the two-arm assembly stubs compile into the same directory and the recorded `llvm-ar` names
+them. Rebuilding the archive from that directory alone drops them; the link then fails on
+symbols from `Mono.Security`. Replay the recorded `ar` command and do not clear `.o` files
+that have no matching `.cpp`.
+
+Putting a new object in both the archive and the link command line fails with duplicate
+symbols, so the extras belong on the command line only.
+
+Verify by symbol, not by exit code. The stripped `.so` keeps no local symbols, so compare
+`md5sum` of `lib/<abi>/libil2cpp.so` in the APK against the objcopy output, and check that
+`global-metadata.dat` contains the new method names:
+
+```
+strings -a .../Managed/Metadata/global-metadata.dat | grep -c AutoStrumChords
+```
+
+## FinalizeChart runs twice, so duration conversion must be one-shot
+
+`ChartFileParser` and `MidiParser` each call `FinalizeChart()` at the end of parsing, and
+`SongLibrary.LoadSong` calls it again to fold in the player's calibration offset. The first
+pass converts `ChartNote.Duration` from ticks to seconds; the second pass then read that
+value as if it were still ticks and converted it again. At 120 BPM and 192 resolution one
+second became ~0.0026 s, which is under `MinSustainSeconds`, so **every sustain was zeroed**
+and no note ever drew a tail. `SongChart._durationsResolved` now gates the conversion so
+repeat passes only re-apply the timing shift.
+
+The lesson generalises: any field `FinalizeChart` rewrites in place has to survive a second
+call, because the calibration pass is not optional. When adding one, either store the
+authored value separately or guard it the way `_durationsResolved` does. `TestFinalizeIsRepeatable`
+in `tools/HeadlessTests.cs` covers this.
+
+## Touch bookkeeping has to release, not just record
+
+`TouchInputController` keeps `_fingerLane` and `_fingerIsStrum` keyed by finger id, and a lane
+stays held as long as any entry points at it. Two paths used to record a finger without a
+matching release:
+
+- A finger Android stopped reporting never fired `Ended`. The stale sweep compared against the
+  live touch list instead of the tracked map, so a finger that vanished between frames stayed
+  held forever and the next note in that lane auto-landed. That reads as a fret stuck on.
+- A finger dragged off the side of the highway hit the "no lane" branch and was ignored, so its
+  old lane stayed held. Sweeping back and forth across the edge left a phantom hold each time.
+
+`MoveTouch` now stores `OutsideLane` (a sentinel, never a real lane) when a point resolves to no
+lane, and every consumer of `_fingerLane` has to test for it before touching `_held[]`. A touch
+that starts beside the highway is tracked the same way, so it can slide into a lane; dropping it
+at `BeginTouch` meant those swipes never pressed a fret at all.
+
+The press spring in `HighwayRenderer.UpdateLaneFeedback` integrates an explicit step, so it has
+to clamp the delta. One long frame (chart decode, GC pause) otherwise threw the spring far past
+its rest position and it took several frames to settle, which is the lag players see on fast
+play. `MaxSpringStep` is that clamp.
+
 ## Packaging by hand
 
 The Gradle template under `Library/Bee/Android/Prj/IL2CPP/Gradle/` is generated once and
@@ -165,8 +234,11 @@ distribution directly:
 ```
 JAVA_HOME=/workspace/unity/jdk /workspace/unity/jdk/bin/java -Xmx4096m \
   -cp "/workspace/unity/Editor/Data/PlaybackEngines/AndroidPlayer/Tools/gradle/lib/*" \
-  org.gradle.launcher.GradleMain --offline :launcher:assembleRelease
+  org.gradle.launcher.GradleMain :launcher:assembleRelease
 ```
+
+Drop `--offline` on a fresh container: `~/.gradle/caches/modules-2` starts empty and the
+Android Gradle Plugin has to be fetched once. Later builds work offline.
 
 The APK lands in `launcher/build/outputs/apk/release/launcher-release.apk`. Check its
 identity with `aapt2 dump badging` and its orientation with

@@ -44,6 +44,7 @@ namespace DroidHero.UI
         static GUIStyle _buttonAccent;
         static GUIStyle _buttonGhost;
         static GUIStyle _textField;
+        static GUIStyle _textFieldPrompt;
         static GUIStyle _center;
         static GUIStyle _centerBold;
         static GUIStyle _songTitle;
@@ -260,15 +261,13 @@ namespace DroidHero.UI
 
         /// <summary>
         /// A song title that has to survive an arbitrary name. Chart names routinely run past
-        /// forty characters, so the label wraps instead of overflowing the row, and clips rather
-        /// than bleeding into the artist line underneath.
+        /// forty characters, so the label wraps instead of overflowing the row.
         /// </summary>
         public static GUIStyle SongTitle => _songTitle ?? (_songTitle = new GUIStyle(CenterBold)
         {
             fontSize = ScaledSize(18),
             alignment = TextAnchor.UpperLeft,
-            wordWrap = true,
-            clipping = TextClipping.Clip
+            wordWrap = true
         });
 
         /// <summary>Song title inside the detail panel, centred over the artist line.</summary>
@@ -281,8 +280,10 @@ namespace DroidHero.UI
         /// Draws a bold label shrunk until it fits its box.
         ///
         /// Chart names are arbitrary and often long, and a fixed font size lets them overflow
-        /// into the artist line or the button beside them. Measuring first and scaling the font
-        /// down keeps every row the same shape whatever the name is.
+        /// into the artist line or the button beside them. The width is estimated from the
+        /// character count because the engine's text measurement is not available on device:
+        /// <c>GUIStyle.CalcSize</c> reaches an icall that engine code stripping removes from
+        /// the player, so calling it throws a MissingMethodException and takes the screen down.
         /// </summary>
         public static void FittedTitle(Rect rect, string text, TextAnchor anchor = TextAnchor.MiddleLeft,
                                  int maxSize = 24, int minSize = 11)
@@ -293,17 +294,27 @@ namespace DroidHero.UI
 
             _titleFit.alignment = anchor;
             _titleFit.wordWrap = false;
-            _titleFit.clipping = TextClipping.Clip;
-            _titleFit.fontSize = ScaledSize(maxSize);
 
-            Vector2 measured = _titleFit.CalcSize(new GUIContent(text));
-            float scale = 1f;
-            if (measured.x > rect.width && measured.x > 0f) scale = rect.width / measured.x;
-            if (measured.y > rect.height && measured.y > 0f) scale = Mathf.Min(scale, rect.height / measured.y);
+            int size = ScaledSize(maxSize);
+            int floor = ScaledSize(minSize);
 
-            _titleFit.fontSize = Mathf.Max(ScaledSize(minSize), Mathf.RoundToInt(_titleFit.fontSize * scale));
+            while (size > floor && EstimateWidth(text, size) > rect.width)
+            {
+                size = Mathf.Max(floor, Mathf.RoundToInt(size * 0.92f));
+            }
+
+            _titleFit.fontSize = size;
             GUI.Label(rect, text, _titleFit);
         }
+
+        /// <summary>
+        /// Approximate advance width of <paramref name="text"/> at <paramref name="fontSize"/>.
+        ///
+        /// The legacy runtime font averages a little over half an em per glyph, which is close
+        /// enough to decide whether a title has to shrink. Being slightly generous keeps long
+        /// names inside their column instead of letting them run under the button.
+        /// </summary>
+        static float EstimateWidth(string text, int fontSize) => text.Length * fontSize * 0.56f;
 
         /// <summary>
         /// Drag-to-scroll for a list, driven by the finger.
@@ -420,6 +431,13 @@ namespace DroidHero.UI
             border = new RectOffset(24, 24, 24, 24),
             normal = { background = RoundedLightTex, textColor = TextPrimary },
             focused = { background = RoundedLightTex, textColor = TextPrimary }
+        });
+
+        /// <summary>Same box as <see cref="TextField"/>, muted while the field is still empty.</summary>
+        public static GUIStyle TextFieldPrompt => _textFieldPrompt ?? (_textFieldPrompt = new GUIStyle(TextField)
+        {
+            normal = { background = RoundedLightTex, textColor = TextMuted },
+            focused = { background = RoundedLightTex, textColor = TextMuted }
         });
 
         /// <summary>Draws a flat colour quad; used for separators, bars and highlights.</summary>
